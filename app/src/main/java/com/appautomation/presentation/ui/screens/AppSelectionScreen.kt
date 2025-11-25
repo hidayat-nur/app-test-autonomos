@@ -183,36 +183,45 @@ fun AppSelectionScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Text(
-                                                            "Batch $batchNum",
-                                                            fontWeight = if (isCurrentBatch) FontWeight.Bold else FontWeight.Normal,
-                                                            color = if (isCurrentBatch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                                        )
-                                                        if (isTested) {
-                                                            Spacer(modifier = Modifier.width(8.dp))
-                                                            Surface(
-                                                                shape = MaterialTheme.shapes.small,
-                                                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                                                                tonalElevation = 2.dp,
-                                                                modifier = Modifier.padding(start = 4.dp)
-                                                            ) {
-                                                                Text(
-                                                                    "Completed",
-                                                                    fontSize = 11.sp,
-                                                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                                )
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Text(
+                                                                "Batch $batchNum",
+                                                                fontWeight = if (isCurrentBatch) FontWeight.Bold else FontWeight.Normal,
+                                                                color = if (isCurrentBatch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                            )
+                                                            if (isTested) {
+                                                                Spacer(modifier = Modifier.width(8.dp))
+                                                                Surface(
+                                                                    shape = MaterialTheme.shapes.small,
+                                                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                                                    tonalElevation = 2.dp,
+                                                                    modifier = Modifier.padding(start = 4.dp)
+                                                                ) {
+                                                                    Text(
+                                                                        "Completed",
+                                                                        fontSize = 11.sp,
+                                                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                                    )
+                                                                }
                                                             }
                                                         }
+
+                                                        // More human-friendly batch range and pluralization
+                                                        val rangeText = if (appsInBatch <= 1) {
+                                                            "App ${startIdx + 1}"
+                                                        } else {
+                                                            "Apps ${startIdx + 1}–$endIdx"
+                                                        }
+                                                        val appsLabel = if (appsInBatch == 1) "1 app" else "$appsInBatch apps"
+
+                                                        Text(
+                                                            appsLabel,
+                                                            fontSize = 11.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
                                                     }
-                                                    Text(
-                                                        "Apps ${startIdx + 1}-$endIdx ($appsInBatch apps)",
-                                                        fontSize = 11.sp,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
                                             
                                             Button(
                                                 onClick = {
@@ -242,12 +251,6 @@ fun AppSelectionScreen(
                             }
                         }
                         
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text(
-                            "${selectedApps.size} apps selected",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
