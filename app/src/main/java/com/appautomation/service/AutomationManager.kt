@@ -157,8 +157,12 @@ class AutomationManager @Inject constructor(
                     delay(1000) // Update every second
                 }
                 
-                // Stop interactions
+                // Stop interactions and close app
                 accessibilityService?.stopRandomInteractions()
+                
+                // Close app by going to home screen
+                appLauncher.goToHome()
+                delay(500) // Wait for home screen transition
                 
                 if (isActive) {
                     completedCount++
