@@ -91,11 +91,13 @@ class AppSelectionViewModel @Inject constructor(
             val tested = prefs.getStringSet(Constants.PREF_TESTED_APPS_TODAY, emptySet()) ?: emptySet()
             _testedAppsToday.value = tested
         } else {
-            // New day - clear tested apps
+            // New day - clear tested apps and reset batch index so user starts fresh each day
             _testedAppsToday.value = emptySet()
+            _currentBatchIndex.value = 0
             prefs.edit().apply {
                 putStringSet(Constants.PREF_TESTED_APPS_TODAY, emptySet())
                 putString(Constants.PREF_LAST_TEST_DATE, today)
+                putInt(Constants.PREF_CURRENT_BATCH_INDEX, 0)
                 apply()
             }
         }
