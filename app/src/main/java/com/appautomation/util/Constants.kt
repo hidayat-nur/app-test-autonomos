@@ -21,4 +21,6 @@ object Constants {
     const val PREF_INTERACTION_INTERVAL = "interaction_interval_seconds"
     const val PREF_INCLUDE_SYSTEM_APPS = "include_system_apps"
     const val PREF_ONBOARDING_COMPLETED = "onboarding_completed"
+    const val PREF_TESTED_APPS_TODAY = "tested_apps_today"
+    const val PREF_LAST_TEST_DATE = "last_test_date"
 }

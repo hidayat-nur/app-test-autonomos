@@ -47,8 +47,12 @@ class AppSelectionViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     
+    private val _testedAppsToday = MutableStateFlow<Set<String>>(emptySet())
+    val testedAppsToday: StateFlow<Set<String>> = _testedAppsToday.asStateFlow()
+    
     init {
         loadGlobalDuration()
+        loadTestedAppsToday()
         loadSavedSelections()
         loadInstalledApps()
     }
@@ -57,6 +61,34 @@ class AppSelectionViewModel @Inject constructor(
         _globalDurationMinutes.value = prefs.getInt(
             Constants.PREF_GLOBAL_DURATION,
             Constants.DEFAULT_DURATION_MINUTES
+        )
+    }
+    
+    private fun loadTestedAppsToday() {
+        val today = getTodayDate()
+        val lastTestDate = prefs.getString(Constants.PREF_LAST_TEST_DATE, "")
+        
+        if (today == lastTestDate) {
+            // Same day - load tested apps
+            val tested = prefs.getStringSet(Constants.PREF_TESTED_APPS_TODAY, emptySet()) ?: emptySet()
+            _testedAppsToday.value = tested
+        } else {
+            // New day - clear tested apps
+            _testedAppsToday.value = emptySet()
+            prefs.edit().apply {
+                putStringSet(Constants.PREF_TESTED_APPS_TODAY, emptySet())
+                putString(Constants.PREF_LAST_TEST_DATE, today)
+                apply()
+            }
+        }
+    }
+    
+    private fun getTodayDate(): String {
+        val calendar = java.util.Calendar.getInstance()
+        return "%04d-%02d-%02d".format(
+            calendar.get(java.util.Calendar.YEAR),
+            calendar.get(java.util.Calendar.MONTH) + 1,
+            calendar.get(java.util.Calendar.DAY_OF_MONTH)
         )
     }
     
@@ -167,7 +199,27 @@ class AppSelectionViewModel @Inject constructor(
             return false
         }
         
+        // Mark all selected apps as tested today
+        markAppsAsTested(tasks.map { it.packageName }.toSet())
+        
         automationManager.startAutomation(tasks)
         return true
+    }
+    
+    fun markAppsAsTested(packageNames: Set<String>) {
+        val currentTested = _testedAppsToday.value.toMutableSet()
+        currentTested.addAll(packageNames)
+        _testedAppsToday.value = currentTested
+        
+        val today = getTodayDate()
+        prefs.edit().apply {
+            putStringSet(Constants.PREF_TESTED_APPS_TODAY, currentTested)
+            putString(Constants.PREF_LAST_TEST_DATE, today)
+            apply()
+        }
+    }
+    
+    fun isAppTestedToday(packageName: String): Boolean {
+        return _testedAppsToday.value.contains(packageName)
     }
 }

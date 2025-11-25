@@ -41,6 +41,7 @@ fun AppSelectionScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val globalDuration by viewModel.globalDurationMinutes.collectAsState()
+    val testedAppsToday by viewModel.testedAppsToday.collectAsState()
     
     var showGlobalDurationDialog by remember { mutableStateOf(false) }
     
@@ -190,6 +191,7 @@ fun AppSelectionScreen(
                         AppSelectionItem(
                             app = app,
                             isSelected = selectedApps.containsKey(app.packageName),
+                            isTestedToday = testedAppsToday.contains(app.packageName),
                             onSelectionChanged = { isSelected ->
                                 viewModel.toggleAppSelection(app, isSelected)
                             }
@@ -218,6 +220,7 @@ fun AppSelectionScreen(
 fun AppSelectionItem(
     app: AppInfo,
     isSelected: Boolean,
+    isTestedToday: Boolean,
     onSelectionChanged: (Boolean) -> Unit
 ) {
     Row(
@@ -234,23 +237,58 @@ fun AppSelectionItem(
         
         Spacer(modifier = Modifier.width(12.dp))
         
-        app.icon?.let { drawable ->
-            val bitmap: Bitmap = drawable.toBitmap()
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.size(48.dp)
-            )
+        Box {
+            app.icon?.let { drawable ->
+                val bitmap: Bitmap = drawable.toBitmap()
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+            
+            // Show checkmark badge if tested today
+            if (isTestedToday) {
+                Surface(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .align(Alignment.BottomEnd),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.primary,
+                    tonalElevation = 4.dp
+                ) {
+                    Icon(
+                        Icons.Default.Done,
+                        contentDescription = "Tested today",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .padding(2.dp)
+                            .size(16.dp)
+                    )
+                }
+            }
         }
         
         Spacer(modifier = Modifier.width(16.dp))
         
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                app.appName,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    app.appName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (isTestedToday) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "✓ Tested",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
             Text(
                 app.packageName,
                 fontSize = 12.sp,
