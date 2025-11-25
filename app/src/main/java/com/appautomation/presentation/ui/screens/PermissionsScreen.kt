@@ -133,18 +133,6 @@ fun PermissionsScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Battery Optimization
-            PermissionCard(
-                title = "Battery Optimization",
-                description = "Recommended: Disable to ensure automation runs smoothly",
-                icon = Icons.Default.BatteryChargingFull,
-                isGranted = permissionsState.batteryOptimizationDisabled,
-                onClick = { viewModel.requestBatteryOptimizationExemption() },
-                isOptional = true
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
             // Notification Permission (Android 13+)
             PermissionCard(
                 title = "Notifications",
