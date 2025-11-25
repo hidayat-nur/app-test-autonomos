@@ -67,15 +67,8 @@ class AutomationForegroundService : Service() {
                         notificationManager.notify(NOTIFICATION_ID, notification)
                     }
                     is AutomationManager.AutomationState.Completed -> {
-                        // Show completion notification and bring our app to foreground
-                        val completionNotification = createNotification(
-                            "✅ Automation Completed (${state.totalApps} apps)",
-                            100
-                        )
-                        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                        notificationManager.notify(NOTIFICATION_ID, completionNotification)
-
-                        // Give a short moment then launch MainActivity so user returns to app
+                        // No completion notification (permission may be missing).
+                        // Still bring our app to foreground so user sees the Completed UI.
                         try {
                             delay(500)
                             val intent = Intent(this@AutomationForegroundService, MainActivity::class.java).apply {
