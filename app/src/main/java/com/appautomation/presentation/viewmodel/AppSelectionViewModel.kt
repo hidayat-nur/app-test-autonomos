@@ -28,7 +28,6 @@ class AppSelectionViewModel @Inject constructor(
     
     companion object {
         private const val PREF_SELECTED_APPS = "selected_apps"
-        private const val PREF_APP_DURATIONS = "app_durations"
     }
     
     private val prefs: SharedPreferences = context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
@@ -39,6 +38,9 @@ class AppSelectionViewModel @Inject constructor(
     private val _selectedApps = MutableStateFlow<Map<String, AppTask>>(emptyMap())
     val selectedApps: StateFlow<Map<String, AppTask>> = _selectedApps.asStateFlow()
     
+    private val _globalDurationMinutes = MutableStateFlow(Constants.DEFAULT_DURATION_MINUTES)
+    val globalDurationMinutes: StateFlow<Int> = _globalDurationMinutes.asStateFlow()
+    
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     
@@ -46,8 +48,16 @@ class AppSelectionViewModel @Inject constructor(
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     
     init {
+        loadGlobalDuration()
         loadSavedSelections()
         loadInstalledApps()
+    }
+    
+    private fun loadGlobalDuration() {
+        _globalDurationMinutes.value = prefs.getInt(
+            Constants.PREF_GLOBAL_DURATION,
+            Constants.DEFAULT_DURATION_MINUTES
+        )
     }
     
     fun loadInstalledApps(includeSystemApps: Boolean = false) {
@@ -61,21 +71,18 @@ class AppSelectionViewModel @Inject constructor(
     
     private fun loadSavedSelections() {
         val savedApps = prefs.getStringSet(PREF_SELECTED_APPS, emptySet()) ?: emptySet()
-        val savedDurations = prefs.getString(PREF_APP_DURATIONS, "{}") ?: "{}"
-        
-        val durationsMap = parseDurationsJson(savedDurations)
+        val globalDuration = _globalDurationMinutes.value * 60 * 1000L
         
         val restoredSelections = savedApps.mapNotNull { entry ->
             val parts = entry.split("|")
             if (parts.size >= 2) {
                 val pkg = parts[0]
                 val appName = parts[1]
-                val duration = durationsMap[pkg] ?: Constants.DEFAULT_DURATION_MILLIS
                 
                 pkg to AppTask(
                     packageName = pkg,
                     appName = appName,
-                    durationMillis = duration
+                    durationMillis = globalDuration
                 )
             } else null
         }.toMap()
@@ -88,38 +95,9 @@ class AppSelectionViewModel @Inject constructor(
             "$pkg|${task.appName}"
         }.toSet()
         
-        val durationsJson = buildDurationsJson(_selectedApps.value)
-        
         prefs.edit().apply {
             putStringSet(PREF_SELECTED_APPS, selectedSet)
-            putString(PREF_APP_DURATIONS, durationsJson)
             apply()
-        }
-    }
-    
-    private fun buildDurationsJson(tasks: Map<String, AppTask>): String {
-        return tasks.entries.joinToString(",", "{", "}") { (pkg, task) ->
-            "\"$pkg\":${task.durationMillis}"
-        }
-    }
-    
-    private fun parseDurationsJson(json: String): Map<String, Long> {
-        if (json == "{}") return emptyMap()
-        
-        return try {
-            json.removeSurrounding("{", "}")
-                .split(",")
-                .mapNotNull { entry ->
-                    val parts = entry.split(":")
-                    if (parts.size == 2) {
-                        val pkg = parts[0].trim().removeSurrounding("\"")
-                        val duration = parts[1].trim().toLongOrNull()
-                        if (duration != null) pkg to duration else null
-                    } else null
-                }
-                .toMap()
-        } catch (e: Exception) {
-            emptyMap()
         }
     }
     
@@ -129,7 +107,7 @@ class AppSelectionViewModel @Inject constructor(
             currentMap[app.packageName] = AppTask(
                 packageName = app.packageName,
                 appName = app.appName,
-                durationMillis = Constants.DEFAULT_DURATION_MILLIS
+                durationMillis = _globalDurationMinutes.value * 60 * 1000L
             )
         } else {
             currentMap.remove(app.packageName)
@@ -138,22 +116,24 @@ class AppSelectionViewModel @Inject constructor(
         saveSelections()
     }
     
-    fun updateDuration(packageName: String, durationMinutes: Int) {
-        val currentMap = _selectedApps.value.toMutableMap()
-        val task = currentMap[packageName]
-        if (task != null) {
-            currentMap[packageName] = task.copy(durationMillis = durationMinutes * 60 * 1000L)
-            _selectedApps.value = currentMap
-            saveSelections()
+    fun updateGlobalDuration(durationMinutes: Int) {
+        _globalDurationMinutes.value = durationMinutes
+        prefs.edit().putInt(Constants.PREF_GLOBAL_DURATION, durationMinutes).apply()
+        
+        // Update all selected apps with new global duration
+        val updatedMap = _selectedApps.value.mapValues { (_, task) ->
+            task.copy(durationMillis = durationMinutes * 60 * 1000L)
         }
+        _selectedApps.value = updatedMap
     }
     
     fun selectAll() {
+        val globalDuration = _globalDurationMinutes.value * 60 * 1000L
         val allSelected = _installedApps.value.associate { app ->
             app.packageName to AppTask(
                 packageName = app.packageName,
                 appName = app.appName,
-                durationMillis = Constants.DEFAULT_DURATION_MILLIS
+                durationMillis = globalDuration
             )
         }
         _selectedApps.value = allSelected

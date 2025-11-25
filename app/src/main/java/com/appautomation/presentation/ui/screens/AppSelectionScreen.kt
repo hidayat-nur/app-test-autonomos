@@ -40,6 +40,9 @@ fun AppSelectionScreen(
     val selectedApps by viewModel.selectedApps.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val globalDuration by viewModel.globalDurationMinutes.collectAsState()
+    
+    var showGlobalDurationDialog by remember { mutableStateOf(false) }
     
     // Permission launcher for Android 13+ notifications
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -98,6 +101,25 @@ fun AppSelectionScreen(
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
+                        // Global duration setting
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Duration for all apps:",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            TextButton(onClick = { showGlobalDurationDialog = true }) {
+                                Text("$globalDuration min")
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.Default.Edit, "Edit duration", modifier = Modifier.size(16.dp))
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
                         Text(
                             "${selectedApps.size} apps selected",
                             style = MaterialTheme.typography.bodyMedium
@@ -168,13 +190,8 @@ fun AppSelectionScreen(
                         AppSelectionItem(
                             app = app,
                             isSelected = selectedApps.containsKey(app.packageName),
-                            durationMinutes = selectedApps[app.packageName]?.durationMillis?.div(60000)?.toInt()
-                                ?: Constants.DEFAULT_DURATION_MINUTES,
                             onSelectionChanged = { isSelected ->
                                 viewModel.toggleAppSelection(app, isSelected)
-                            },
-                            onDurationChanged = { minutes ->
-                                viewModel.updateDuration(app.packageName, minutes)
                             }
                         )
                         Divider()
@@ -183,18 +200,26 @@ fun AppSelectionScreen(
             }
         }
     }
+    
+    // Global duration dialog
+    if (showGlobalDurationDialog) {
+        DurationPickerDialog(
+            currentDuration = globalDuration,
+            onDismiss = { showGlobalDurationDialog = false },
+            onConfirm = { newDuration ->
+                viewModel.updateGlobalDuration(newDuration)
+                showGlobalDurationDialog = false
+            }
+        )
+    }
 }
 
 @Composable
 fun AppSelectionItem(
     app: AppInfo,
     isSelected: Boolean,
-    durationMinutes: Int,
-    onSelectionChanged: (Boolean) -> Unit,
-    onDurationChanged: (Int) -> Unit
+    onSelectionChanged: (Boolean) -> Unit
 ) {
-    var showDurationDialog by remember { mutableStateOf(false) }
-    
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -232,24 +257,6 @@ fun AppSelectionItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        
-        if (isSelected) {
-            TextButton(onClick = { showDurationDialog = true }) {
-                Text("$durationMinutes min")
-                Icon(Icons.Default.Edit, "Edit duration", modifier = Modifier.size(16.dp))
-            }
-        }
-    }
-    
-    if (showDurationDialog) {
-        DurationPickerDialog(
-            currentDuration = durationMinutes,
-            onDismiss = { showDurationDialog = false },
-            onConfirm = { newDuration ->
-                onDurationChanged(newDuration)
-                showDurationDialog = false
-            }
-        )
     }
 }
 
