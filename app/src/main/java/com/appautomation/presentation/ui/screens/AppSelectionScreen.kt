@@ -80,7 +80,20 @@ fun AppSelectionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Select Apps") },
+                title = { 
+                    Column {
+                        Text(
+                            "BorderTech",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+                        Text(
+                            "Select Apps",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 actions = {
                     if (selectedApps.isNotEmpty()) {
                         TextButton(onClick = { viewModel.clearAll() }) {

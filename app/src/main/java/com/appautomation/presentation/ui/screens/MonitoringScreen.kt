@@ -33,7 +33,20 @@ fun MonitoringScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Automation Monitor") },
+                title = { 
+                    Column {
+                        Text(
+                            "BorderTech",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+                        Text(
+                            "Automation Monitor",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, "Back")

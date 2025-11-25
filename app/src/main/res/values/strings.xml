@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">App Automation</string>
+    <string name="app_name">BorderTech Automation</string>
     <string name="accessibility_service_description">This service allows the app to automatically launch and interact with other apps for testing purposes. It can perform gestures, clicks, and monitor app states.</string>
     
     <!-- Permissions -->
@@ -44,7 +44,7 @@
     <string name="permission_denied">Not Granted</string>
     
     <!-- Notifications -->
-    <string name="notification_channel_name">App Automation</string>
+    <string name="notification_channel_name">BorderTech Automation</string>
     <string name="notification_channel_description">Shows automation progress and status</string>
     <string name="notification_title">Automation Running</string>
     <string name="notification_current_app">Current: %s</string>

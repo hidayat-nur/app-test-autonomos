@@ -14,7 +14,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.appautomation.presentation.viewmodel.SettingsViewModel
 
@@ -50,7 +52,20 @@ fun PermissionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Required Permissions") }
+                title = { 
+                    Column {
+                        Text(
+                            "BorderTech",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+                        Text(
+                            "Setup",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             )
         }
     ) { padding ->
@@ -67,6 +82,15 @@ fun PermissionsScreen(
                 contentDescription = null,
                 modifier = Modifier.size(80.dp),
                 tint = MaterialTheme.colorScheme.primary
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Text(
+                "Welcome to BorderTech Automation",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
             )
             
             Spacer(modifier = Modifier.height(24.dp))
