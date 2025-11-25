@@ -86,8 +86,6 @@ fun MonitoringScreen(
                 }
                 
                 is AutomationManager.AutomationState.Completed -> {
-                    // Move to next batch after completion
-                    viewModel.moveToNextBatch()
                     CompletedStateContent(
                         totalApps = currentState.totalApps,
                         onDismiss = {

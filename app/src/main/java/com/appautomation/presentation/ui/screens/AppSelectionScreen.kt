@@ -273,12 +273,7 @@ fun AppSelectionScreen(
                         
                         // Quick start button for current batch
                         val currentBatch = currentBatchIndex + 1
-                        val buttonText = when {
-                            totalBatches == 0 -> "▶️ Start Testing"
-                            currentBatchIndex >= totalBatches -> "✅ All Batches Complete - Restart"
-                            currentBatchIndex == 0 -> "▶️ Start Batch 1"
-                            else -> "▶️ Continue Batch $currentBatch"
-                        }
+                        val buttonText = if (currentBatchIndex == 0) "▶️ Start Batch 1" else "▶️ Continue Batch $currentBatch"
                         Button(
                             onClick = {
                                 // Check and request notification permission for Android 13+
@@ -287,6 +282,8 @@ fun AppSelectionScreen(
                                 } else {
                                     // For older versions, just start
                                     if (viewModel.startAutomation()) {
+                                        // Move to next batch for next time
+                                        viewModel.moveToNextBatch()
                                         val intent = Intent(context, AutomationForegroundService::class.java)
                                         context.startForegroundService(intent)
                                         onNavigateToMonitoring()
