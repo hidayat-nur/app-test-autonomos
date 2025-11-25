@@ -47,6 +47,7 @@ fun AppSelectionScreen(
     
     var showGlobalDurationDialog by remember { mutableStateOf(false) }
     var showBatchSizeDialog by remember { mutableStateOf(false) }
+    var showBatchList by remember { mutableStateOf(false) }
     
     // Permission launcher for Android 13+ notifications
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -147,51 +148,118 @@ fun AppSelectionScreen(
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         
-                        // Batch progress indicator
+                        // Batch list header
                         val totalBatches = viewModel.getTotalBatches()
-                        val currentBatch = currentBatchIndex + 1
-                        val startIndex = currentBatchIndex * batchSize
-                        val endIndex = minOf(startIndex + batchSize, selectedApps.size)
-                        val appsInThisBatch = endIndex - startIndex
                         
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
                             )
                         ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp)
-                            ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        "📦 Batch $currentBatch of $totalBatches",
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                    Text(
-                                        "$batchSize apps/batch",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    "Will test $appsInThisBatch apps (${startIndex + 1}-$endIndex of ${selectedApps.size})",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                
-                                // Progress bar
-                                LinearProgressIndicator(
-                                    progress = currentBatchIndex.toFloat() / totalBatches.toFloat(),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(top = 8.dp),
+                                        .clickable { showBatchList = !showBatchList },
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "📦 $totalBatches Batches Available",
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Icon(
+                                        if (showBatchList) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        "Expand",
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                                Text(
+                                    "${selectedApps.size} apps • $batchSize per batch",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
+                            }
+                        }
+                        
+                        // Batch list (expandable)
+                        if (showBatchList) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    for (batchIndex in 0 until totalBatches) {
+                                        val batchNum = batchIndex + 1
+                                        val startIdx = batchIndex * batchSize
+                                        val endIdx = minOf(startIdx + batchSize, selectedApps.size)
+                                        val appsInBatch = endIdx - startIdx
+                                        val isCurrentBatch = batchIndex == currentBatchIndex
+                                        val isTested = testedAppsToday.isNotEmpty() && 
+                                            selectedApps.keys.drop(startIdx).take(appsInBatch).all { testedAppsToday.contains(it) }
+                                        
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        "Batch $batchNum",
+                                                        fontWeight = if (isCurrentBatch) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (isCurrentBatch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    if (isTested) {
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            "✓",
+                                                            fontSize = 12.sp,
+                                                            color = MaterialTheme.colorScheme.tertiary
+                                                        )
+                                                    }
+                                                }
+                                                Text(
+                                                    "Apps ${startIdx + 1}-$endIdx ($appsInBatch apps)",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            
+                                            Button(
+                                                onClick = {
+                                                    // Set batch index and start
+                                                    viewModel.setBatchIndex(batchIndex)
+                                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                                    } else {
+                                                        if (viewModel.startAutomation()) {
+                                                            viewModel.moveToNextBatch()
+                                                            val intent = Intent(context, AutomationForegroundService::class.java)
+                                                            context.startForegroundService(intent)
+                                                            onNavigateToMonitoring()
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.height(36.dp),
+                                                contentPadding = PaddingValues(horizontal = 12.dp)
+                                            ) {
+                                                Text("Start", fontSize = 12.sp)
+                                            }
+                                        }
+                                        
+                                        if (batchIndex < totalBatches - 1) {
+                                            Divider(
+                                                modifier = Modifier.padding(vertical = 4.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         
@@ -203,8 +271,9 @@ fun AppSelectionScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         
-                        // Start or Continue button
-                        val buttonText = if (currentBatchIndex == 0) "Start Batch 1" else "Continue → Batch $currentBatch"
+                        // Quick start button for current batch
+                        val currentBatch = currentBatchIndex + 1
+                        val buttonText = if (currentBatchIndex == 0) "▶️ Start Batch 1" else "▶️ Continue Batch $currentBatch"
                         Button(
                             onClick = {
                                 // Check and request notification permission for Android 13+
@@ -223,22 +292,7 @@ fun AppSelectionScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.PlayArrow, "Start")
-                            Spacer(modifier = Modifier.width(8.dp))
                             Text(buttonText)
-                        }
-                        
-                        // Reset button if not on first batch
-                        if (currentBatchIndex > 0) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            OutlinedButton(
-                                onClick = { viewModel.resetBatchIndex() },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowLeft, "Reset")
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Reset to Batch 1")
-                            }
                         }
                     }
                 }

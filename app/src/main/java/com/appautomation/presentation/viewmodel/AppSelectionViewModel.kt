@@ -252,6 +252,11 @@ class AppSelectionViewModel @Inject constructor(
         prefs.edit().putInt(Constants.PREF_CURRENT_BATCH_INDEX, _currentBatchIndex.value).apply()
     }
     
+    fun setBatchIndex(index: Int) {
+        _currentBatchIndex.value = index
+        prefs.edit().putInt(Constants.PREF_CURRENT_BATCH_INDEX, index).apply()
+    }
+    
     fun resetBatchIndex() {
         _currentBatchIndex.value = 0
         prefs.edit().putInt(Constants.PREF_CURRENT_BATCH_INDEX, 0).apply()
