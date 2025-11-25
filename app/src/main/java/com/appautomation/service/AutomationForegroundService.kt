@@ -67,7 +67,27 @@ class AutomationForegroundService : Service() {
                         notificationManager.notify(NOTIFICATION_ID, notification)
                     }
                     is AutomationManager.AutomationState.Completed -> {
-                        // Service will be stopped by user or automatically
+                        // Show completion notification and bring our app to foreground
+                        val completionNotification = createNotification(
+                            "✅ Automation Completed (${state.totalApps} apps)",
+                            100
+                        )
+                        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                        notificationManager.notify(NOTIFICATION_ID, completionNotification)
+
+                        // Give a short moment then launch MainActivity so user returns to app
+                        try {
+                            delay(500)
+                            val intent = Intent(this@AutomationForegroundService, MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            }
+                            startActivity(intent)
+                            android.util.Log.d(TAG, "Launched MainActivity after completion")
+                        } catch (e: Exception) {
+                            android.util.Log.e(TAG, "Failed to launch MainActivity on completion", e)
+                        }
+
+                        // Keep service alive briefly to ensure activity is shown, then stop
                         delay(2000)
                         stopSelf()
                     }

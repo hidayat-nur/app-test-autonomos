@@ -121,7 +121,7 @@ class AppSelectionViewModel @Inject constructor(
     
     private fun loadSavedSelections() {
         val savedApps = prefs.getStringSet(PREF_SELECTED_APPS, emptySet()) ?: emptySet()
-        val globalDuration = _globalDurationMinutes.value * 60 * 1000L
+        val globalDuration = if (Constants.TEST_MODE) Constants.TEST_DURATION_MILLIS else _globalDurationMinutes.value * 60 * 1000L
         
         val restoredSelections = savedApps.mapNotNull { entry ->
             val parts = entry.split("|")
@@ -154,10 +154,11 @@ class AppSelectionViewModel @Inject constructor(
     fun toggleAppSelection(app: AppInfo, isSelected: Boolean) {
         val currentMap = _selectedApps.value.toMutableMap()
         if (isSelected) {
+            val duration = if (Constants.TEST_MODE) Constants.TEST_DURATION_MILLIS else _globalDurationMinutes.value * 60 * 1000L
             currentMap[app.packageName] = AppTask(
                 packageName = app.packageName,
                 appName = app.appName,
-                durationMillis = _globalDurationMinutes.value * 60 * 1000L
+                durationMillis = duration
             )
         } else {
             currentMap.remove(app.packageName)
@@ -172,7 +173,8 @@ class AppSelectionViewModel @Inject constructor(
         
         // Update all selected apps with new global duration
         val updatedMap = _selectedApps.value.mapValues { (_, task) ->
-            task.copy(durationMillis = durationMinutes * 60 * 1000L)
+            val newDuration = if (Constants.TEST_MODE) Constants.TEST_DURATION_MILLIS else durationMinutes * 60 * 1000L
+            task.copy(durationMillis = newDuration)
         }
         _selectedApps.value = updatedMap
     }
@@ -183,7 +185,7 @@ class AppSelectionViewModel @Inject constructor(
     }
     
     fun selectAll() {
-        val globalDuration = _globalDurationMinutes.value * 60 * 1000L
+        val globalDuration = if (Constants.TEST_MODE) Constants.TEST_DURATION_MILLIS else _globalDurationMinutes.value * 60 * 1000L
         val allSelected = _installedApps.value.associate { app ->
             app.packageName to AppTask(
                 packageName = app.packageName,

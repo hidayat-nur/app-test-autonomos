@@ -190,10 +190,9 @@ class AutomationManager @Inject constructor(
         if (isActive) {
             _automationState.value = AutomationState.Completed(completedCount)
             Log.d(TAG, "Automation completed: $completedCount/$totalCount apps")
-            
-            // Go back to home screen
-            delay(1000)
-            appLauncher.goToHome()
+
+            // NOTE: Do NOT send user to Home here. Keep app in control so Foreground
+            // service (or UI) can bring our app to foreground and show completion.
         }
     }
     
