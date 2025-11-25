@@ -49,10 +49,18 @@ class AppLauncher @Inject constructor(
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
             
+            val currentPackageName = context.packageName // "com.appautomation"
+            
             packageManager.queryIntentActivities(intent, 0)
                 .mapNotNull { resolveInfo ->
                     try {
                         val packageName = resolveInfo.activityInfo.packageName
+                        
+                        // Exclude this app itself
+                        if (packageName == currentPackageName) {
+                            return@mapNotNull null
+                        }
+                        
                         val appInfo = packageManager.getApplicationInfo(packageName, 0)
                         val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                         
