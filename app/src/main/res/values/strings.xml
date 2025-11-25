@@ -1,0 +1,59 @@
+<resources>
+    <string name="app_name">App Automation</string>
+    <string name="accessibility_service_description">This service allows the app to automatically launch and interact with other apps for testing purposes. It can perform gestures, clicks, and monitor app states.</string>
+    
+    <!-- Permissions -->
+    <string name="permission_accessibility_title">Accessibility Service</string>
+    <string name="permission_accessibility_description">Required to control and interact with other apps automatically</string>
+    <string name="permission_usage_stats_title">Usage Stats Access</string>
+    <string name="permission_usage_stats_description">Required to detect which app is currently running</string>
+    <string name="permission_battery_title">Battery Optimization</string>
+    <string name="permission_battery_description">Disable to ensure automation runs smoothly in background</string>
+    <string name="permission_notification_title">Notifications</string>
+    <string name="permission_notification_description">Show automation progress and status</string>
+    
+    <!-- Screens -->
+    <string name="screen_selection">App Selection</string>
+    <string name="screen_monitoring">Monitoring</string>
+    <string name="screen_settings">Settings</string>
+    
+    <!-- App Selection -->
+    <string name="select_apps_title">Select Apps to Automate</string>
+    <string name="no_apps_selected">No apps selected</string>
+    <string name="start_automation">Start Automation</string>
+    <string name="app_count">%d apps selected</string>
+    <string name="duration_minutes">%d minutes</string>
+    
+    <!-- Monitoring -->
+    <string name="currently_running">Currently Running</string>
+    <string name="time_remaining">Time Remaining: %s</string>
+    <string name="queue">Queue</string>
+    <string name="completed">Completed!</string>
+    <string name="total_apps_automated">Total apps automated: %d</string>
+    <string name="error_occurred">Error: %s</string>
+    <string name="no_automation_running">No automation running</string>
+    <string name="pause">Pause</string>
+    <string name="stop">Stop</string>
+    <string name="resume">Resume</string>
+    
+    <!-- Settings -->
+    <string name="default_duration">Default Duration</string>
+    <string name="enable_permissions">Enable Permissions</string>
+    <string name="open_settings">Open Settings</string>
+    <string name="permission_granted">Granted</string>
+    <string name="permission_denied">Not Granted</string>
+    
+    <!-- Notifications -->
+    <string name="notification_channel_name">App Automation</string>
+    <string name="notification_channel_description">Shows automation progress and status</string>
+    <string name="notification_title">Automation Running</string>
+    <string name="notification_current_app">Current: %s</string>
+    <string name="notification_action_pause">Pause</string>
+    <string name="notification_action_stop">Stop</string>
+    
+    <!-- Errors -->
+    <string name="error_launch_failed">Failed to launch %s</string>
+    <string name="error_permission_required">Required permissions not granted</string>
+    <string name="error_accessibility_disabled">Accessibility service is not enabled</string>
+    <string name="error_usage_stats_disabled">Usage stats permission not granted</string>
+</resources>
