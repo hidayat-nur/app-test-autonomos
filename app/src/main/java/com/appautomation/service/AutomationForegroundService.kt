@@ -89,8 +89,19 @@ class AutomationForegroundService : Service() {
                 automationManager.resumeAutomation()
             }
             ACTION_STOP -> {
+                android.util.Log.d(TAG, "🛑 STOP button pressed - stopping automation")
                 automationManager.stopAutomation()
-                stopSelf()
+                
+                // Show stop notification briefly
+                val stopNotification = createStopNotification()
+                val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.notify(NOTIFICATION_ID, stopNotification)
+                
+                // Stop service after brief delay
+                serviceScope.launch {
+                    delay(1000)
+                    stopSelf()
+                }
             }
         }
         return START_STICKY
@@ -182,7 +193,11 @@ class AutomationForegroundService : Service() {
                 this, 1, resumeIntent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
-            builder.addAction(R.drawable.ic_play, getString(R.string.resume), resumePendingIntent)
+            builder.addAction(
+                R.drawable.ic_play, 
+                "▶️ ${getString(R.string.resume)}", 
+                resumePendingIntent
+            )
         } else {
             val pauseIntent = Intent(this, AutomationForegroundService::class.java).apply {
                 action = ACTION_PAUSE
@@ -191,9 +206,14 @@ class AutomationForegroundService : Service() {
                 this, 1, pauseIntent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
-            builder.addAction(R.drawable.ic_pause, getString(R.string.pause), pausePendingIntent)
+            builder.addAction(
+                R.drawable.ic_pause, 
+                "⏸️ ${getString(R.string.pause)}", 
+                pausePendingIntent
+            )
         }
         
+        // STOP button - always visible and prominent
         val stopIntent = Intent(this, AutomationForegroundService::class.java).apply {
             action = ACTION_STOP
         }
@@ -201,7 +221,27 @@ class AutomationForegroundService : Service() {
             this, 2, stopIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        builder.addAction(R.drawable.ic_stop, getString(R.string.stop), stopPendingIntent)
+        builder.addAction(
+            R.drawable.ic_stop, 
+            "⛔ ${getString(R.string.stop)}", 
+            stopPendingIntent
+        )
+        
+        // Make notification persistent and high priority
+        builder.setOngoing(true)
+        builder.setPriority(NotificationCompat.PRIORITY_HIGH)
+        builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        
+        return builder.build()
+    }
+    
+    private fun createStopNotification(): Notification {
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("BorderTech Automation")
+            .setContentText("⛔ Automation Stopped")
+            .setSmallIcon(R.drawable.ic_stop)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
         
         return builder.build()
     }
