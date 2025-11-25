@@ -30,7 +30,9 @@ fun PermissionsScreen(
     
     // Auto-navigate when all permissions granted
     LaunchedEffect(permissionsState) {
-        if (permissionsState.accessibilityEnabled && permissionsState.usageStatsGranted) {
+        if (permissionsState.accessibilityEnabled && 
+            permissionsState.usageStatsGranted && 
+            permissionsState.overlayPermissionGranted) {
             onPermissionsGranted()
         }
     }
@@ -40,7 +42,7 @@ fun PermissionsScreen(
     DisposableEffect(Unit) {
         val job = scope.launch {
             while (isActive) {
-                delay(1000)
+                delay(2000) // Check every 2 seconds instead of 1
                 viewModel.checkPermissions()
             }
         }
@@ -133,19 +135,20 @@ fun PermissionsScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Notification Permission (Android 13+)
+            // Overlay Permission (for floating timer)
             PermissionCard(
-                title = "Notifications",
-                description = "Required to show automation progress and status",
-                icon = Icons.Default.Notifications,
-                isGranted = permissionsState.notificationPermissionGranted,
-                onClick = { viewModel.openNotificationSettings() },
-                isOptional = false
+                title = "Display over other apps",
+                description = "Required to show floating timer during testing",
+                icon = Icons.Default.BubbleChart,
+                isGranted = permissionsState.overlayPermissionGranted,
+                onClick = { viewModel.openOverlaySettings() }
             )
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            if (permissionsState.accessibilityEnabled && permissionsState.usageStatsGranted) {
+            if (permissionsState.accessibilityEnabled && 
+                permissionsState.usageStatsGranted && 
+                permissionsState.overlayPermissionGranted) {
                 Button(
                     onClick = onPermissionsGranted,
                     modifier = Modifier.fillMaxWidth()

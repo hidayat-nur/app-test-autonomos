@@ -1,11 +1,7 @@
 package com.appautomation.presentation.ui.screens
 
-import android.Manifest
 import android.content.Intent
 import android.graphics.Bitmap
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -48,31 +44,6 @@ fun AppSelectionScreen(
     var showGlobalDurationDialog by remember { mutableStateOf(false) }
     var showBatchSizeDialog by remember { mutableStateOf(false) }
     var showBatchList by remember { mutableStateOf(false) }
-    
-    // Permission launcher for Android 13+ notifications
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            // Permission granted, start automation
-            if (viewModel.startAutomation()) {
-                // Move to next batch for next time
-                viewModel.moveToNextBatch()
-                val intent = Intent(context, AutomationForegroundService::class.java)
-                context.startForegroundService(intent)
-                onNavigateToMonitoring()
-            }
-        } else {
-            // Permission denied - still start but warn user
-            if (viewModel.startAutomation()) {
-                // Move to next batch for next time
-                viewModel.moveToNextBatch()
-                val intent = Intent(context, AutomationForegroundService::class.java)
-                context.startForegroundService(intent)
-                onNavigateToMonitoring()
-            }
-        }
-    }
     
     val filteredApps = remember(installedApps, searchQuery) {
         if (searchQuery.isEmpty()) {
@@ -234,15 +205,10 @@ fun AppSelectionScreen(
                                                 onClick = {
                                                     // Set batch index and start
                                                     viewModel.setBatchIndex(batchIndex)
-                                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                                    } else {
-                                                        if (viewModel.startAutomation()) {
-                                                            viewModel.moveToNextBatch()
-                                                            val intent = Intent(context, AutomationForegroundService::class.java)
-                                                            context.startForegroundService(intent)
-                                                            onNavigateToMonitoring()
-                                                        }
+                                                    if (viewModel.startAutomation()) {
+                                                        val intent = Intent(context, AutomationForegroundService::class.java)
+                                                        context.startForegroundService(intent)
+                                                        onNavigateToMonitoring()
                                                     }
                                                 },
                                                 modifier = Modifier.height(36.dp),
@@ -276,18 +242,10 @@ fun AppSelectionScreen(
                         val buttonText = if (currentBatchIndex == 0) "▶️ Start Batch 1" else "▶️ Continue Batch $currentBatch"
                         Button(
                             onClick = {
-                                // Check and request notification permission for Android 13+
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                } else {
-                                    // For older versions, just start
-                                    if (viewModel.startAutomation()) {
-                                        // Move to next batch for next time
-                                        viewModel.moveToNextBatch()
-                                        val intent = Intent(context, AutomationForegroundService::class.java)
-                                        context.startForegroundService(intent)
-                                        onNavigateToMonitoring()
-                                    }
+                                if (viewModel.startAutomation()) {
+                                    val intent = Intent(context, AutomationForegroundService::class.java)
+                                    context.startForegroundService(intent)
+                                    onNavigateToMonitoring()
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()

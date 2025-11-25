@@ -39,6 +39,17 @@ class AutomationForegroundService : Service() {
         // Acquire wake lock to prevent device from sleeping
         acquireWakeLock()
         
+        // Start floating timer bubble
+        val floatingIntent = Intent(this, FloatingTimerService::class.java).apply {
+            action = FloatingTimerService.ACTION_SHOW
+        }
+        try {
+            startService(floatingIntent)
+            android.util.Log.d(TAG, "Requested FloatingTimerService start. Overlay permission=${android.provider.Settings.canDrawOverlays(this)}")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to start FloatingTimerService", e)
+        }
+        
         // Observe automation state and update notification
         serviceScope.launch {
             automationManager.automationState.collectLatest { state ->
@@ -111,6 +122,13 @@ class AutomationForegroundService : Service() {
     
     override fun onDestroy() {
         super.onDestroy()
+        
+        // Hide floating timer bubble
+        val floatingIntent = Intent(this, FloatingTimerService::class.java).apply {
+            action = FloatingTimerService.ACTION_HIDE
+        }
+        startService(floatingIntent)
+        
         releaseWakeLock()
         serviceScope.cancel()
     }
