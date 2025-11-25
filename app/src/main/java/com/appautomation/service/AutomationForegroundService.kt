@@ -4,6 +4,7 @@ import android.app.*
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.appautomation.R
 import com.appautomation.presentation.ui.MainActivity
@@ -28,11 +29,15 @@ class AutomationForegroundService : Service() {
     lateinit var automationManager: AutomationManager
     
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var wakeLock: PowerManager.WakeLock? = null
     
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification("Initializing...", 0))
+        
+        // Acquire wake lock to prevent device from sleeping
+        acquireWakeLock()
         
         // Observe automation state and update notification
         serviceScope.launch {
@@ -95,7 +100,37 @@ class AutomationForegroundService : Service() {
     
     override fun onDestroy() {
         super.onDestroy()
+        releaseWakeLock()
         serviceScope.cancel()
+    }
+    
+    private fun acquireWakeLock() {
+        try {
+            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "AppAutomation::AutomationWakeLock"
+            ).apply {
+                acquire(10 * 60 * 60 * 1000L) // 10 hours max
+            }
+            android.util.Log.d(TAG, "✅ Wake lock acquired - device won't sleep during automation")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "❌ Failed to acquire wake lock", e)
+        }
+    }
+    
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    android.util.Log.d(TAG, "✅ Wake lock released")
+                }
+            }
+            wakeLock = null
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "❌ Failed to release wake lock", e)
+        }
     }
     
     private fun createNotificationChannel() {
