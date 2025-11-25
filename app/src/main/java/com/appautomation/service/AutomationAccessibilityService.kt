@@ -152,7 +152,7 @@ class AutomationAccessibilityService : AccessibilityService() {
     /**
      * Perform random interactions (clicks and scrolls)
      */
-    fun startRandomInteractions(intervalSeconds: Int = 5) {
+    fun startRandomInteractions(intervalSeconds: Int = 1) {
         stopRandomInteractions()
         
         Log.d(TAG, "🎮 Starting random interactions (interval: ${intervalSeconds}s)")
@@ -160,7 +160,7 @@ class AutomationAccessibilityService : AccessibilityService() {
         
         // Perform first gesture immediately to test
         serviceScope.launch {
-            delay(2000) // Wait 2 seconds then do first gesture
+            delay(500) // Wait 0.5 seconds then do first gesture
             Log.d(TAG, "🔥 Performing FIRST gesture immediately...")
             performRandomGesture()
         }

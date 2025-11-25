@@ -181,7 +181,7 @@ fun RunningStateContent(
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     Text(
-                        "Taps, swipes & scrolls every 5 seconds",
+                        "Taps, swipes & scrolls every second",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
