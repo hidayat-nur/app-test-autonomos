@@ -21,12 +21,36 @@ class AutomationAccessibilityService : AccessibilityService() {
         fun getInstance(): AutomationAccessibilityService? = instance
         
         fun isServiceEnabled(): Boolean = instance != null
+        
+        // Browser and external app blacklist
+        private val BROWSER_PACKAGES = setOf(
+            "com.android.chrome",
+            "com.chrome.beta",
+            "com.chrome.dev",
+            "org.mozilla.firefox",
+            "com.opera.browser",
+            "com.opera.mini.native",
+            "com.brave.browser",
+            "com.microsoft.emmx",
+            "com.UCMobile.intl",
+            "com.kiwibrowser.browser",
+            "com.duckduckgo.mobile.android",
+            "org.chromium.chrome",
+            "com.sec.android.app.sbrowser", // Samsung Internet
+            "mark.via.gp",
+            "com.amazon.cloud9",
+            "com.android.browser"
+        )
     }
     
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var gestureJob: Job? = null
     private var gestureCount = 0
     private var currentTargetPackage: String? = null
+    private var currentActivePackage: String? = null
+    private var isGesturePaused = false
+    private var lastRelaunchTime = 0L
+    private var relaunchJob: Job? = null
     private var monitorJob: Job? = null
     
     override fun onServiceConnected() {
@@ -36,23 +60,73 @@ class AutomationAccessibilityService : AccessibilityService() {
     }
     
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Monitor events and detect app switches
         event?.let {
             if (it.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
                 val packageName = it.packageName?.toString()
-                Log.d(TAG, "Window changed: $packageName")
+                currentActivePackage = packageName
                 
-                // Check if user switched away from target app
-                if (currentTargetPackage != null && packageName != null && 
-                    packageName != currentTargetPackage && 
-                    !packageName.startsWith("com.android.systemui")) {
+                Log.d(TAG, "Window changed: $packageName (target: $currentTargetPackage)")
+                
+                // CRITICAL: Check if it's a BROWSER!
+                if (packageName != null && BROWSER_PACKAGES.contains(packageName)) {
+                    Log.e(TAG, "🚫 BROWSER DETECTED: $packageName - BLOCKING NOW!")
+                    isGesturePaused = true
                     
-                    Log.w(TAG, "⚠️ Switched away from $currentTargetPackage to $packageName")
-                    
-                    // Relaunch target app after short delay
+                    // IMMEDIATE ACTION - Exit browser AND relaunch target app!
                     serviceScope.launch {
-                        delay(500)
-                        relaunchtargetApp()
+                        // BACK to exit browser
+                        Log.d(TAG, "⬅️ Pressing BACK to exit browser")
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                        delay(200)
+                        
+                        // IMMEDIATELY relaunch target app (don't wait to check)
+                        if (currentTargetPackage != null) {
+                            Log.w(TAG, "🔄 RELAUNCH target app: $currentTargetPackage")
+                            relaunchtargetApp()
+                            
+                            // Resume gestures after relaunch
+                            delay(500)
+                            isGesturePaused = false
+                            Log.d(TAG, "▶️ RESUME gestures after relaunch")
+                        }
+                    }
+                    return
+                }
+                
+                // Check if we're in target app or not
+                if (currentTargetPackage != null && packageName != null) {
+                    if (packageName == currentTargetPackage) {
+                        // Back in target app - resume gestures
+                        if (isGesturePaused) {
+                            isGesturePaused = false
+                            relaunchJob?.cancel()
+                            relaunchJob = null
+                            Log.d(TAG, "✅ Back in target app - resuming gestures")
+                        }
+                    } else if (!packageName.startsWith("com.android.systemui")) {
+                        // Switched to different app (not browser, handled above)
+                        if (!isGesturePaused) {
+                            isGesturePaused = true
+                            Log.w(TAG, "⚠️ ESCAPED TO: $packageName")
+                        }
+                        
+                        // Debounce relaunch
+                        val now = System.currentTimeMillis()
+                        if (now - lastRelaunchTime > 1000) {
+                            lastRelaunchTime = now
+                            relaunchJob?.cancel()
+                            
+                            relaunchJob = serviceScope.launch {
+                                // Try back button
+                                performGlobalAction(GLOBAL_ACTION_BACK)
+                                delay(800)
+                                
+                                // Force relaunch if needed
+                                if (currentActivePackage != currentTargetPackage) {
+                                    relaunchtargetApp()
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -189,7 +263,12 @@ class AutomationAccessibilityService : AccessibilityService() {
         }
         gestureJob?.cancel()
         gestureJob = null
+        relaunchJob?.cancel()
+        relaunchJob = null
         currentTargetPackage = null
+        currentActivePackage = null
+        isGesturePaused = false
+        lastRelaunchTime = 0
     }
     
     /**
@@ -214,9 +293,64 @@ class AutomationAccessibilityService : AccessibilityService() {
     }
     
     /**
+     * Get current active package from accessibility tree
+     */
+    private fun getCurrentPackageName(): String? {
+        return try {
+            rootInActiveWindow?.packageName?.toString()
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    /**
      * Perform a random gesture (tap, scroll, swipe)
      */
     private fun performRandomGesture() {
+        // CRITICAL CHECK 1: Don't perform if paused
+        if (isGesturePaused) {
+            Log.d(TAG, "⏸️ Gesture BLOCKED - paused flag")
+            return
+        }
+        
+        // CRITICAL CHECK 2: Real-time package verification
+        val currentPkg = getCurrentPackageName()
+        
+        // Block if it's a browser
+        if (currentPkg != null && BROWSER_PACKAGES.contains(currentPkg)) {
+            Log.e(TAG, "🚫 GESTURE BLOCKED - Browser detected: $currentPkg")
+            isGesturePaused = true
+            // Immediate exit and relaunch
+            serviceScope.launch {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                delay(200)
+                if (currentTargetPackage != null) {
+                    relaunchtargetApp()
+                    delay(500)
+                    isGesturePaused = false
+                    Log.d(TAG, "▶️ RESUME gestures after browser exit")
+                }
+            }
+            return
+        }
+        
+        // Block if not in target app
+        if (currentPkg != null && currentPkg != currentTargetPackage) {
+            Log.w(TAG, "⚠️ GESTURE BLOCKED - Not in target app: $currentPkg vs $currentTargetPackage")
+            isGesturePaused = true
+            serviceScope.launch {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                delay(500)
+                if (getCurrentPackageName() != currentTargetPackage) {
+                    relaunchtargetApp()
+                    delay(500)
+                    isGesturePaused = false
+                    Log.d(TAG, "▶️ RESUME gestures after relaunch")
+                }
+            }
+            return
+        }
+        
         gestureCount++
         val displayMetrics: DisplayMetrics = resources.displayMetrics
         val screenHeight = displayMetrics.heightPixels
