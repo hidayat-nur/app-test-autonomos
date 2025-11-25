@@ -26,6 +26,8 @@ class AutomationAccessibilityService : AccessibilityService() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var gestureJob: Job? = null
     private var gestureCount = 0
+    private var currentTargetPackage: String? = null
+    private var monitorJob: Job? = null
     
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -34,10 +36,25 @@ class AutomationAccessibilityService : AccessibilityService() {
     }
     
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Monitor events if needed
+        // Monitor events and detect app switches
         event?.let {
             if (it.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-                Log.d(TAG, "Window changed: ${it.packageName}")
+                val packageName = it.packageName?.toString()
+                Log.d(TAG, "Window changed: $packageName")
+                
+                // Check if user switched away from target app
+                if (currentTargetPackage != null && packageName != null && 
+                    packageName != currentTargetPackage && 
+                    !packageName.startsWith("com.android.systemui")) {
+                    
+                    Log.w(TAG, "⚠️ Switched away from $currentTargetPackage to $packageName")
+                    
+                    // Relaunch target app after short delay
+                    serviceScope.launch {
+                        delay(500)
+                        relaunchtargetApp()
+                    }
+                }
             }
         }
     }
@@ -138,10 +155,12 @@ class AutomationAccessibilityService : AccessibilityService() {
     /**
      * Perform random interactions (clicks and scrolls)
      */
-    fun startRandomInteractions(intervalMillis: Long = 500) {
+    fun startRandomInteractions(intervalMillis: Long = 500, targetPackage: String? = null) {
         stopRandomInteractions()
         
+        currentTargetPackage = targetPackage
         Log.d(TAG, "🎮 Starting random interactions (interval: ${intervalMillis}ms)")
+        Log.d(TAG, "📱 Target package: $targetPackage")
         Log.d(TAG, "📱 Service instance: ${if (instance != null) "ACTIVE" else "NULL"}")
         
         gestureJob = serviceScope.launch {
@@ -170,6 +189,28 @@ class AutomationAccessibilityService : AccessibilityService() {
         }
         gestureJob?.cancel()
         gestureJob = null
+        currentTargetPackage = null
+    }
+    
+    /**
+     * Relaunch target app when user switches away
+     */
+    private fun relaunchtargetApp() {
+        currentTargetPackage?.let { packageName ->
+            try {
+                val intent = packageManager.getLaunchIntentForPackage(packageName)
+                if (intent != null) {
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    startActivity(intent)
+                    Log.d(TAG, "🔄 Relaunched target app: $packageName")
+                } else {
+                    Log.e(TAG, "❌ Cannot relaunch: No launch intent for $packageName")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to relaunch app", e)
+            }
+        }
     }
     
     /**
