@@ -41,9 +41,12 @@ fun AppSelectionScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val globalDuration by viewModel.globalDurationMinutes.collectAsState()
+    val batchSize by viewModel.batchSize.collectAsState()
+    val currentBatchIndex by viewModel.currentBatchIndex.collectAsState()
     val testedAppsToday by viewModel.testedAppsToday.collectAsState()
     
     var showGlobalDurationDialog by remember { mutableStateOf(false) }
+    var showBatchSizeDialog by remember { mutableStateOf(false) }
     
     // Permission launcher for Android 13+ notifications
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -52,6 +55,8 @@ fun AppSelectionScreen(
         if (isGranted) {
             // Permission granted, start automation
             if (viewModel.startAutomation()) {
+                // Move to next batch for next time
+                viewModel.moveToNextBatch()
                 val intent = Intent(context, AutomationForegroundService::class.java)
                 context.startForegroundService(intent)
                 onNavigateToMonitoring()
@@ -59,6 +64,8 @@ fun AppSelectionScreen(
         } else {
             // Permission denied - still start but warn user
             if (viewModel.startAutomation()) {
+                // Move to next batch for next time
+                viewModel.moveToNextBatch()
                 val intent = Intent(context, AutomationForegroundService::class.java)
                 context.startForegroundService(intent)
                 onNavigateToMonitoring()
@@ -95,8 +102,14 @@ fun AppSelectionScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showBatchSizeDialog = true }) {
+                        Icon(Icons.Default.Settings, "Batch Settings")
+                    }
                     if (selectedApps.isNotEmpty()) {
-                        TextButton(onClick = { viewModel.clearAll() }) {
+                        TextButton(onClick = { 
+                            viewModel.clearAll()
+                            viewModel.resetBatchIndex()
+                        }) {
                             Text("Clear All")
                         }
                     }
@@ -134,11 +147,64 @@ fun AppSelectionScreen(
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         
+                        // Batch progress indicator
+                        val totalBatches = viewModel.getTotalBatches()
+                        val currentBatch = currentBatchIndex + 1
+                        val startIndex = currentBatchIndex * batchSize
+                        val endIndex = minOf(startIndex + batchSize, selectedApps.size)
+                        val appsInThisBatch = endIndex - startIndex
+                        
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        "📦 Batch $currentBatch of $totalBatches",
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        "$batchSize apps/batch",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Will test $appsInThisBatch apps (${startIndex + 1}-$endIndex of ${selectedApps.size})",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                
+                                // Progress bar
+                                LinearProgressIndicator(
+                                    progress = currentBatchIndex.toFloat() / totalBatches.toFloat(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp),
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
                         Text(
                             "${selectedApps.size} apps selected",
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Start or Continue button
+                        val buttonText = if (currentBatchIndex == 0) "Start Batch 1" else "Continue → Batch $currentBatch"
                         Button(
                             onClick = {
                                 // Check and request notification permission for Android 13+
@@ -147,6 +213,8 @@ fun AppSelectionScreen(
                                 } else {
                                     // For older versions, just start
                                     if (viewModel.startAutomation()) {
+                                        // Move to next batch for next time
+                                        viewModel.moveToNextBatch()
                                         val intent = Intent(context, AutomationForegroundService::class.java)
                                         context.startForegroundService(intent)
                                         onNavigateToMonitoring()
@@ -157,7 +225,20 @@ fun AppSelectionScreen(
                         ) {
                             Icon(Icons.Default.PlayArrow, "Start")
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Start Automation")
+                            Text(buttonText)
+                        }
+                        
+                        // Reset button if not on first batch
+                        if (currentBatchIndex > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = { viewModel.resetBatchIndex() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowLeft, "Reset")
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Reset to Batch 1")
+                            }
                         }
                     }
                 }
@@ -224,6 +305,18 @@ fun AppSelectionScreen(
             onConfirm = { newDuration ->
                 viewModel.updateGlobalDuration(newDuration)
                 showGlobalDurationDialog = false
+            }
+        )
+    }
+    
+    // Batch size dialog
+    if (showBatchSizeDialog) {
+        BatchSizePickerDialog(
+            currentBatchSize = batchSize,
+            onDismiss = { showBatchSizeDialog = false },
+            onConfirm = { newSize ->
+                viewModel.updateBatchSize(newSize)
+                showBatchSizeDialog = false
             }
         )
     }
@@ -352,3 +445,58 @@ fun DurationPickerDialog(
         }
     )
 }
+
+@Composable
+fun BatchSizePickerDialog(
+    currentBatchSize: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var batchSize by remember { mutableStateOf(currentBatchSize) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Batch Size Settings") },
+        text = {
+            Column {
+                Text(
+                    "Set how many apps to test per batch. Smaller batches = more control.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Apps per batch: $batchSize", fontWeight = FontWeight.Bold)
+                Slider(
+                    value = batchSize.toFloat(),
+                    onValueChange = { batchSize = it.toInt() },
+                    valueRange = Constants.MIN_BATCH_SIZE.toFloat()..Constants.MAX_BATCH_SIZE.toFloat(),
+                    steps = Constants.MAX_BATCH_SIZE - Constants.MIN_BATCH_SIZE - 1
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("${Constants.MIN_BATCH_SIZE}", fontSize = 12.sp)
+                    Text("${Constants.MAX_BATCH_SIZE}", fontSize = 12.sp)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "💡 Recommended: 15-25 apps for optimal control",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(batchSize) }) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+

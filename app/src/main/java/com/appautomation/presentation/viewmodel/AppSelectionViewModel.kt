@@ -41,6 +41,12 @@ class AppSelectionViewModel @Inject constructor(
     private val _globalDurationMinutes = MutableStateFlow(Constants.DEFAULT_DURATION_MINUTES)
     val globalDurationMinutes: StateFlow<Int> = _globalDurationMinutes.asStateFlow()
     
+    private val _batchSize = MutableStateFlow(Constants.DEFAULT_BATCH_SIZE)
+    val batchSize: StateFlow<Int> = _batchSize.asStateFlow()
+    
+    private val _currentBatchIndex = MutableStateFlow(0)
+    val currentBatchIndex: StateFlow<Int> = _currentBatchIndex.asStateFlow()
+    
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     
@@ -52,6 +58,7 @@ class AppSelectionViewModel @Inject constructor(
     
     init {
         loadGlobalDuration()
+        loadBatchSettings()
         loadTestedAppsToday()
         loadSavedSelections()
         loadInstalledApps()
@@ -61,6 +68,17 @@ class AppSelectionViewModel @Inject constructor(
         _globalDurationMinutes.value = prefs.getInt(
             Constants.PREF_GLOBAL_DURATION,
             Constants.DEFAULT_DURATION_MINUTES
+        )
+    }
+    
+    private fun loadBatchSettings() {
+        _batchSize.value = prefs.getInt(
+            Constants.PREF_BATCH_SIZE,
+            Constants.DEFAULT_BATCH_SIZE
+        )
+        _currentBatchIndex.value = prefs.getInt(
+            Constants.PREF_CURRENT_BATCH_INDEX,
+            0
         )
     }
     
@@ -159,6 +177,11 @@ class AppSelectionViewModel @Inject constructor(
         _selectedApps.value = updatedMap
     }
     
+    fun updateBatchSize(size: Int) {
+        _batchSize.value = size
+        prefs.edit().putInt(Constants.PREF_BATCH_SIZE, size).apply()
+    }
+    
     fun selectAll() {
         val globalDuration = _globalDurationMinutes.value * 60 * 1000L
         val allSelected = _installedApps.value.associate { app ->
@@ -194,16 +217,55 @@ class AppSelectionViewModel @Inject constructor(
     }
     
     fun startAutomation(): Boolean {
-        val tasks = _selectedApps.value.values.toList()
-        if (tasks.isEmpty()) {
+        val allTasks = _selectedApps.value.values.toList()
+        if (allTasks.isEmpty()) {
             return false
         }
         
-        // Mark all selected apps as tested today
-        markAppsAsTested(tasks.map { it.packageName }.toSet())
+        // Get current batch
+        val batchTasks = getCurrentBatch(allTasks)
+        if (batchTasks.isEmpty()) {
+            // No more batches - reset to beginning
+            _currentBatchIndex.value = 0
+            prefs.edit().putInt(Constants.PREF_CURRENT_BATCH_INDEX, 0).apply()
+            return false
+        }
         
-        automationManager.startAutomation(tasks)
+        // Mark current batch as tested today
+        markAppsAsTested(batchTasks.map { it.packageName }.toSet())
+        
+        automationManager.startAutomation(batchTasks)
         return true
+    }
+    
+    private fun getCurrentBatch(allTasks: List<AppTask>): List<AppTask> {
+        val startIndex = _currentBatchIndex.value * _batchSize.value
+        if (startIndex >= allTasks.size) {
+            return emptyList()
+        }
+        val endIndex = minOf(startIndex + _batchSize.value, allTasks.size)
+        return allTasks.subList(startIndex, endIndex)
+    }
+    
+    fun moveToNextBatch() {
+        _currentBatchIndex.value += 1
+        prefs.edit().putInt(Constants.PREF_CURRENT_BATCH_INDEX, _currentBatchIndex.value).apply()
+    }
+    
+    fun resetBatchIndex() {
+        _currentBatchIndex.value = 0
+        prefs.edit().putInt(Constants.PREF_CURRENT_BATCH_INDEX, 0).apply()
+    }
+    
+    fun getTotalBatches(): Int {
+        val totalApps = _selectedApps.value.size
+        if (totalApps == 0) return 0
+        return (totalApps + _batchSize.value - 1) / _batchSize.value
+    }
+    
+    fun hasMoreBatches(): Boolean {
+        val totalBatches = getTotalBatches()
+        return _currentBatchIndex.value < totalBatches - 1
     }
     
     fun markAppsAsTested(packageNames: Set<String>) {

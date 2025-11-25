@@ -14,6 +14,11 @@ object Constants {
     const val MIN_INTERACTION_INTERVAL_SECONDS = 1
     const val MAX_INTERACTION_INTERVAL_SECONDS = 60
     
+    // Batch settings
+    const val DEFAULT_BATCH_SIZE = 20
+    const val MIN_BATCH_SIZE = 1
+    const val MAX_BATCH_SIZE = 50
+    
     // Shared preferences
     const val PREFS_NAME = "automation_prefs"
     const val PREF_DEFAULT_DURATION = "default_duration_minutes"
@@ -23,4 +28,6 @@ object Constants {
     const val PREF_ONBOARDING_COMPLETED = "onboarding_completed"
     const val PREF_TESTED_APPS_TODAY = "tested_apps_today"
     const val PREF_LAST_TEST_DATE = "last_test_date"
+    const val PREF_BATCH_SIZE = "batch_size"
+    const val PREF_CURRENT_BATCH_INDEX = "current_batch_index"
 }
