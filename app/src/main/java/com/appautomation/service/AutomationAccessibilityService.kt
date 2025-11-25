@@ -138,10 +138,10 @@ class AutomationAccessibilityService : AccessibilityService() {
     /**
      * Perform random interactions (clicks and scrolls)
      */
-    fun startRandomInteractions(intervalSeconds: Int = 1) {
+    fun startRandomInteractions(intervalMillis: Long = 500) {
         stopRandomInteractions()
         
-        Log.d(TAG, "🎮 Starting random interactions (interval: ${intervalSeconds}s)")
+        Log.d(TAG, "🎮 Starting random interactions (interval: ${intervalMillis}ms)")
         Log.d(TAG, "📱 Service instance: ${if (instance != null) "ACTIVE" else "NULL"}")
         
         gestureJob = serviceScope.launch {
@@ -151,7 +151,7 @@ class AutomationAccessibilityService : AccessibilityService() {
             
             // Then loop with interval
             while (isActive) {
-                delay(intervalSeconds * 1000L)
+                delay(intervalMillis)
                 val startTime = System.currentTimeMillis()
                 performRandomGesture()
                 val elapsed = System.currentTimeMillis() - startTime
