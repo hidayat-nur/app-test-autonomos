@@ -236,22 +236,6 @@ fun AppSelectionScreen(
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        
-                        // Quick start button for current batch
-                        val currentBatch = currentBatchIndex + 1
-                        val buttonText = if (currentBatchIndex == 0) "▶️ Start Batch 1" else "▶️ Continue Batch $currentBatch"
-                        Button(
-                            onClick = {
-                                if (viewModel.startAutomation()) {
-                                    val intent = Intent(context, AutomationForegroundService::class.java)
-                                    context.startForegroundService(intent)
-                                    onNavigateToMonitoring()
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(buttonText)
-                        }
                     }
                 }
             }
