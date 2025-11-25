@@ -196,48 +196,47 @@ class AutomationAccessibilityService : AccessibilityService() {
         val screenWidth = displayMetrics.widthPixels
         
         val random = Random.Default
-        val gestureType = random.nextInt(7) // 0-6: multiple gesture types
+        val gestureType = random.nextInt(10) // 0-9: weighted gestures
         
         when (gestureType) {
-            0, 1 -> {
-                // Random tap in safe zone (higher probability)
-                val x = random.nextInt(screenWidth / 4, screenWidth * 3 / 4).toFloat()
-                val y = random.nextInt(screenHeight / 4, screenHeight * 3 / 4).toFloat()
+            0, 1, 2, 3 -> {
+                // Multiple taps in center area (40% chance) - safe zone
+                val x = random.nextInt((screenWidth * 0.3f).toInt(), (screenWidth * 0.7f).toInt()).toFloat()
+                val y = random.nextInt((screenHeight * 0.35f).toInt(), (screenHeight * 0.65f).toInt()).toFloat()
                 performClick(x, y)
-                Log.d(TAG, "👆 Gesture #$gestureCount: Random TAP at (${x.toInt()}, ${y.toInt()})")
+                Log.d(TAG, "👆 Gesture #$gestureCount: TAP CENTER at (${x.toInt()}, ${y.toInt()})")
             }
-            2 -> {
-                // Scroll down
+            4, 5 -> {
+                // Scroll down (20% chance) - most common user action
                 scrollDown()
                 Log.d(TAG, "👇 Gesture #$gestureCount: SCROLL DOWN")
             }
-            3 -> {
-                // Scroll up
+            6 -> {
+                // Scroll up (10% chance)
                 scrollUp()
                 Log.d(TAG, "👆 Gesture #$gestureCount: SCROLL UP")
             }
-            4 -> {
-                // Swipe right (like switching tabs or going back)
-                val startX = screenWidth * 0.2f
-                val endX = screenWidth * 0.8f
-                val y = screenHeight * 0.5f
-                performSwipe(startX, y, endX, y, 300)
-                Log.d(TAG, "👉 Gesture #$gestureCount: SWIPE RIGHT")
+            7 -> {
+                // Tap upper area (10% chance) - for toolbar/tabs
+                val x = random.nextInt((screenWidth * 0.3f).toInt(), (screenWidth * 0.7f).toInt()).toFloat()
+                val y = random.nextInt((screenHeight * 0.15f).toInt(), (screenHeight * 0.35f).toInt()).toFloat()
+                performClick(x, y)
+                Log.d(TAG, "👆 Gesture #$gestureCount: TAP UPPER at (${x.toInt()}, ${y.toInt()})")
             }
-            5 -> {
-                // Swipe left (like switching tabs)
-                val startX = screenWidth * 0.8f
-                val endX = screenWidth * 0.2f
+            8 -> {
+                // Tap lower area (10% chance) - for bottom nav
+                val x = random.nextInt((screenWidth * 0.3f).toInt(), (screenWidth * 0.7f).toInt()).toFloat()
+                val y = random.nextInt((screenHeight * 0.75f).toInt(), (screenHeight * 0.85f).toInt()).toFloat()
+                performClick(x, y)
+                Log.d(TAG, "👆 Gesture #$gestureCount: TAP LOWER at (${x.toInt()}, ${y.toInt()})")
+            }
+            9 -> {
+                // Light swipe left (10% chance) - for carousels/tabs
+                val startX = screenWidth * 0.7f
+                val endX = screenWidth * 0.3f
                 val y = screenHeight * 0.5f
-                performSwipe(startX, y, endX, y, 300)
+                performSwipe(startX, y, endX, y, 200)
                 Log.d(TAG, "👈 Gesture #$gestureCount: SWIPE LEFT")
-            }
-            6 -> {
-                // Double tap in center
-                val x = screenWidth * 0.5f
-                val y = screenHeight * 0.5f
-                performClick(x, y, 50)
-                Log.d(TAG, "👆👆 Gesture #$gestureCount: DOUBLE TAP (center)")
             }
         }
     }
