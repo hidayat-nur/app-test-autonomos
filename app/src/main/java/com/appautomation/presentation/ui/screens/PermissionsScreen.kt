@@ -121,6 +121,18 @@ fun PermissionsScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
+            // Notification Permission (Android 13+)
+            PermissionCard(
+                title = "Notifications",
+                description = "Required to show automation progress and status",
+                icon = Icons.Default.Notifications,
+                isGranted = permissionsState.notificationPermissionGranted,
+                onClick = { viewModel.openNotificationSettings() },
+                isOptional = false
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
             if (permissionsState.accessibilityEnabled && permissionsState.usageStatsGranted) {
                 Button(
                     onClick = onPermissionsGranted,

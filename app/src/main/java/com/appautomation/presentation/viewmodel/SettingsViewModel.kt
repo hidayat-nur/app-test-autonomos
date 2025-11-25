@@ -25,7 +25,8 @@ class SettingsViewModel @Inject constructor(
     data class PermissionsState(
         val accessibilityEnabled: Boolean = false,
         val usageStatsGranted: Boolean = false,
-        val batteryOptimizationDisabled: Boolean = false
+        val batteryOptimizationDisabled: Boolean = false,
+        val notificationPermissionGranted: Boolean = false
     )
     
     init {
@@ -36,7 +37,8 @@ class SettingsViewModel @Inject constructor(
         _permissionsState.value = PermissionsState(
             accessibilityEnabled = PermissionHelper.isAccessibilityServiceEnabled(context),
             usageStatsGranted = PermissionHelper.hasUsageStatsPermission(context),
-            batteryOptimizationDisabled = PermissionHelper.isBatteryOptimizationDisabled(context)
+            batteryOptimizationDisabled = PermissionHelper.isBatteryOptimizationDisabled(context),
+            notificationPermissionGranted = PermissionHelper.hasNotificationPermission(context)
         )
     }
     
@@ -50,6 +52,10 @@ class SettingsViewModel @Inject constructor(
     
     fun requestBatteryOptimizationExemption() {
         PermissionHelper.requestBatteryOptimizationExemption(context)
+    }
+    
+    fun openNotificationSettings() {
+        PermissionHelper.openNotificationSettings(context)
     }
     
     fun cleanOldLogs() {

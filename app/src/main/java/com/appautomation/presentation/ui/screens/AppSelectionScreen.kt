@@ -1,7 +1,11 @@
 package com.appautomation.presentation.ui.screens
 
+import android.Manifest
 import android.content.Intent
 import android.graphics.Bitmap
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,6 +40,27 @@ fun AppSelectionScreen(
     val selectedApps by viewModel.selectedApps.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    
+    // Permission launcher for Android 13+ notifications
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            // Permission granted, start automation
+            if (viewModel.startAutomation()) {
+                val intent = Intent(context, AutomationForegroundService::class.java)
+                context.startForegroundService(intent)
+                onNavigateToMonitoring()
+            }
+        } else {
+            // Permission denied - still start but warn user
+            if (viewModel.startAutomation()) {
+                val intent = Intent(context, AutomationForegroundService::class.java)
+                context.startForegroundService(intent)
+                onNavigateToMonitoring()
+            }
+        }
+    }
     
     val filteredApps = remember(installedApps, searchQuery) {
         if (searchQuery.isEmpty()) {
@@ -80,11 +105,16 @@ fun AppSelectionScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
                             onClick = {
-                                if (viewModel.startAutomation()) {
-                                    // Start foreground service
-                                    val intent = Intent(context, AutomationForegroundService::class.java)
-                                    context.startForegroundService(intent)
-                                    onNavigateToMonitoring()
+                                // Check and request notification permission for Android 13+
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    // For older versions, just start
+                                    if (viewModel.startAutomation()) {
+                                        val intent = Intent(context, AutomationForegroundService::class.java)
+                                        context.startForegroundService(intent)
+                                        onNavigateToMonitoring()
+                                    }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()

@@ -30,6 +30,7 @@ class AutomationManager @Inject constructor(
         data class Running(
             val currentApp: AppTask,
             val remainingTimeMillis: Long,
+            val elapsedTimeMillis: Long,
             val queue: List<AppTask>,
             val completedCount: Int,
             val totalCount: Int
@@ -48,6 +49,8 @@ class AutomationManager @Inject constructor(
     private var isPaused = false
     private var pausedApp: AppTask? = null
     private var pausedRemainingTime: Long = 0
+    private var sessionStartTime: Long = 0
+    private var pausedSessionStartTime: Long = 0
     
     /**
      * Start automation with list of apps
@@ -87,6 +90,14 @@ class AutomationManager @Inject constructor(
         var completedCount = 0
         val totalCount = apps.size
         
+        // Initialize session start time or restore from pause
+        if (sessionStartTime == 0L || !isPaused) {
+            sessionStartTime = System.currentTimeMillis()
+        } else {
+            // Restore from pause - adjust start time to maintain elapsed time
+            sessionStartTime = pausedSessionStartTime
+        }
+        
         for ((index, appTask) in apps.withIndex()) {
             if (!isActive) break
             
@@ -125,10 +136,12 @@ class AutomationManager @Inject constructor(
             try {
                 while (System.currentTimeMillis() < endTime && isActive) {
                     val remaining = endTime - System.currentTimeMillis()
+                    val elapsed = System.currentTimeMillis() - sessionStartTime
                     
                     _automationState.value = AutomationState.Running(
                         currentApp = appTask,
                         remainingTimeMillis = remaining.coerceAtLeast(0),
+                        elapsedTimeMillis = elapsed,
                         queue = apps.drop(index + 1),
                         completedCount = completedCount,
                         totalCount = totalCount
@@ -213,6 +226,7 @@ class AutomationManager @Inject constructor(
             val currentState = _automationState.value as AutomationState.Running
             pausedApp = currentState.currentApp
             pausedRemainingTime = currentState.remainingTimeMillis
+            pausedSessionStartTime = sessionStartTime
             isPaused = true
             
             automationJob?.cancel()

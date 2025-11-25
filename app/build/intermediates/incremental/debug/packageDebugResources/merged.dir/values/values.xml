@@ -27,6 +27,7 @@
     <string name="notification_channel_description">Shows automation progress and status</string>
     <string name="notification_channel_name">App Automation</string>
     <string name="notification_current_app">Current: %s</string>
+    <string name="notification_elapsed_time">Running for %s</string>
     <string name="notification_title">Automation Running</string>
     <string name="open_settings">Open Settings</string>
     <string name="pause">Pause</string>

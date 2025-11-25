@@ -41,9 +41,11 @@ class AutomationForegroundService : Service() {
                     is AutomationManager.AutomationState.Running -> {
                         val progress = ((state.currentApp.durationMillis - state.remainingTimeMillis) * 100 / state.currentApp.durationMillis).toInt()
                         val timeStr = formatTime(state.remainingTimeMillis)
+                        val elapsedStr = formatTime(state.elapsedTimeMillis)
                         val notification = createNotification(
                             "${state.currentApp.appName} - $timeStr remaining",
-                            progress
+                            progress,
+                            elapsedTime = elapsedStr
                         )
                         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
                         notificationManager.notify(NOTIFICATION_ID, notification)
@@ -112,7 +114,7 @@ class AutomationForegroundService : Service() {
         }
     }
     
-    private fun createNotification(text: String, progress: Int, isPaused: Boolean = false): Notification {
+    private fun createNotification(text: String, progress: Int, isPaused: Boolean = false, elapsedTime: String? = null): Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
@@ -126,6 +128,11 @@ class AutomationForegroundService : Service() {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+        
+        // Add elapsed time as subtext if provided
+        if (elapsedTime != null) {
+            builder.setSubText(getString(R.string.notification_elapsed_time, elapsedTime))
+        }
         
         if (progress > 0) {
             builder.setProgress(100, progress, false)

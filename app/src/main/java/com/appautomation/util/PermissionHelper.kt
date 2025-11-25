@@ -1,8 +1,10 @@
 package com.appautomation.util
 
+import android.Manifest
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Process
@@ -53,6 +55,20 @@ object PermissionHelper {
     }
     
     /**
+     * Check if notification permission is granted (Android 13+)
+     */
+    fun hasNotificationPermission(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true // Not required for older versions
+        }
+    }
+    
+    /**
      * Open Accessibility Settings
      */
     fun openAccessibilitySettings(context: Context) {
@@ -88,6 +104,27 @@ object PermissionHelper {
                 fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 ContextCompat.startActivity(context, fallbackIntent, null)
             }
+        }
+    }
+    
+    /**
+     * Open app notification settings
+     */
+    fun openNotificationSettings(context: Context) {
+        val intent = Intent().apply {
+            action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            ContextCompat.startActivity(context, intent, null)
+        } catch (e: Exception) {
+            // Fallback to app settings
+            val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            ContextCompat.startActivity(context, fallbackIntent, null)
         }
     }
     
