@@ -44,6 +44,7 @@ fun AppSelectionScreen(
     var showGlobalDurationDialog by remember { mutableStateOf(false) }
     var showBatchSizeDialog by remember { mutableStateOf(false) }
     var showBatchList by remember { mutableStateOf(false) }
+    var showSettingsMenu by remember { mutableStateOf(false) }
     
     val filteredApps = remember(installedApps, searchQuery) {
         if (searchQuery.isEmpty()) {
@@ -74,8 +75,27 @@ fun AppSelectionScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showBatchSizeDialog = true }) {
+                    IconButton(onClick = { showSettingsMenu = !showSettingsMenu }) {
                         Icon(Icons.Default.Settings, "Batch Settings")
+                    }
+                    DropdownMenu(
+                        expanded = showSettingsMenu,
+                        onDismissRequest = { showSettingsMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Batch size") },
+                            onClick = {
+                                showBatchSizeDialog = true
+                                showSettingsMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Duration") },
+                            onClick = {
+                                showGlobalDurationDialog = true
+                                showSettingsMenu = false
+                            }
+                        )
                     }
                     if (selectedApps.isNotEmpty()) {
                         TextButton(onClick = { 
@@ -100,22 +120,7 @@ fun AppSelectionScreen(
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
-                        // Global duration setting
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Duration for all apps:",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            TextButton(onClick = { showGlobalDurationDialog = true }) {
-                                Text("$globalDuration min")
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(Icons.Default.Edit, "Edit duration", modifier = Modifier.size(16.dp))
-                            }
-                        }
+                        // Duration setting moved to top-right Settings menu
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         
