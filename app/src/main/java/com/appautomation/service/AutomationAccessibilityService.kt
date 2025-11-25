@@ -64,17 +64,9 @@ class AutomationAccessibilityService : AccessibilityService() {
                 .addStroke(GestureDescription.StrokeDescription(path, 0, duration))
                 .build()
             
-            var success = false
-            dispatchGesture(gesture, object : GestureResultCallback() {
-                override fun onCompleted(gestureDescription: GestureDescription?) {
-                    success = true
-                    Log.d(TAG, "✅ Click gesture completed at ($x, $y)")
-                }
-                
-                override fun onCancelled(gestureDescription: GestureDescription?) {
-                    Log.e(TAG, "❌ Click gesture CANCELLED at ($x, $y)")
-                }
-            }, null)
+            // Fire and forget - don't wait for callback
+            dispatchGesture(gesture, null, null)
+            Log.d(TAG, "✅ Click dispatched at ($x, $y)")
             true
         } catch (e: Exception) {
             Log.e(TAG, "❌ FAILED to perform click: ${e.message}", e)
@@ -99,15 +91,9 @@ class AutomationAccessibilityService : AccessibilityService() {
                 .addStroke(GestureDescription.StrokeDescription(path, 0, duration))
                 .build()
             
-            dispatchGesture(gesture, object : GestureResultCallback() {
-                override fun onCompleted(gestureDescription: GestureDescription?) {
-                    Log.d(TAG, "Swipe gesture completed")
-                }
-                
-                override fun onCancelled(gestureDescription: GestureDescription?) {
-                    Log.w(TAG, "Swipe gesture cancelled")
-                }
-            }, null)
+            // Fire and forget - don't wait for callback
+            dispatchGesture(gesture, null, null)
+            Log.d(TAG, "✅ Swipe dispatched")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to perform swipe", e)
@@ -158,18 +144,18 @@ class AutomationAccessibilityService : AccessibilityService() {
         Log.d(TAG, "🎮 Starting random interactions (interval: ${intervalSeconds}s)")
         Log.d(TAG, "📱 Service instance: ${if (instance != null) "ACTIVE" else "NULL"}")
         
-        // Perform first gesture immediately to test
-        serviceScope.launch {
-            delay(500) // Wait 0.5 seconds then do first gesture
-            Log.d(TAG, "🔥 Performing FIRST gesture immediately...")
-            performRandomGesture()
-        }
-        
         gestureJob = serviceScope.launch {
-            delay(intervalSeconds * 1000L) // Skip first interval since we did immediate gesture
+            // First gesture immediately
+            Log.d(TAG, "🔥 Performing FIRST gesture NOW...")
+            performRandomGesture()
+            
+            // Then loop with interval
             while (isActive) {
-                performRandomGesture()
                 delay(intervalSeconds * 1000L)
+                val startTime = System.currentTimeMillis()
+                performRandomGesture()
+                val elapsed = System.currentTimeMillis() - startTime
+                Log.d(TAG, "⏱️ Gesture execution took ${elapsed}ms")
             }
         }
     }
@@ -196,48 +182,376 @@ class AutomationAccessibilityService : AccessibilityService() {
         val screenWidth = displayMetrics.widthPixels
         
         val random = Random.Default
-        val gestureType = random.nextInt(10) // 0-9: weighted gestures
+        val actionType = random.nextInt(100)
+        
+        when {
+            actionType < 15 -> {
+                // 15% - Try bottom navigation tabs
+                if (clickBottomNavigation(screenWidth, screenHeight)) {
+                    Log.d(TAG, "📱 Gesture #$gestureCount: BOTTOM NAV")
+                    return
+                }
+            }
+            actionType < 25 -> {
+                // 10% - Try floating action button (FAB)
+                if (clickFloatingActionButton(screenWidth, screenHeight)) {
+                    Log.d(TAG, "🔘 Gesture #$gestureCount: FAB BUTTON")
+                    return
+                }
+            }
+            actionType < 35 -> {
+                // 10% - Try toolbar/action bar buttons
+                if (clickToolbarButtons(screenWidth, screenHeight)) {
+                    Log.d(TAG, "🔝 Gesture #$gestureCount: TOOLBAR BUTTON")
+                    return
+                }
+            }
+            actionType < 50 -> {
+                // 15% - Try to click any UI element
+                try {
+                    if (clickRandomClickableElement()) {
+                        Log.d(TAG, "✅ Gesture #$gestureCount: CLICKED UI ELEMENT")
+                        return
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "⚠️ UI click failed", e)
+                }
+            }
+        }
+        
+        // Fallback to random gestures (50%)
+        val gestureType = random.nextInt(10)
         
         when (gestureType) {
             0, 1, 2, 3 -> {
-                // Multiple taps in center area (40% chance) - safe zone
-                val x = random.nextInt((screenWidth * 0.3f).toInt(), (screenWidth * 0.7f).toInt()).toFloat()
-                val y = random.nextInt((screenHeight * 0.35f).toInt(), (screenHeight * 0.65f).toInt()).toFloat()
+                // 40% - Tap random area
+                val x = random.nextInt((screenWidth * 0.2f).toInt(), (screenWidth * 0.8f).toInt()).toFloat()
+                val y = random.nextInt((screenHeight * 0.2f).toInt(), (screenHeight * 0.8f).toInt()).toFloat()
                 performClick(x, y)
-                Log.d(TAG, "👆 Gesture #$gestureCount: TAP CENTER at (${x.toInt()}, ${y.toInt()})")
+                Log.d(TAG, "👆 Gesture #$gestureCount: TAP at (${x.toInt()}, ${y.toInt()})")
             }
-            4, 5 -> {
-                // Scroll down (20% chance) - most common user action
+            4, 5, 6 -> {
+                // 30% - Scroll down
                 scrollDown()
                 Log.d(TAG, "👇 Gesture #$gestureCount: SCROLL DOWN")
             }
-            6 -> {
-                // Scroll up (10% chance)
+            7, 8 -> {
+                // 20% - Scroll up
                 scrollUp()
                 Log.d(TAG, "👆 Gesture #$gestureCount: SCROLL UP")
             }
-            7 -> {
-                // Tap upper area (10% chance) - for toolbar/tabs
-                val x = random.nextInt((screenWidth * 0.3f).toInt(), (screenWidth * 0.7f).toInt()).toFloat()
-                val y = random.nextInt((screenHeight * 0.15f).toInt(), (screenHeight * 0.35f).toInt()).toFloat()
-                performClick(x, y)
-                Log.d(TAG, "👆 Gesture #$gestureCount: TAP UPPER at (${x.toInt()}, ${y.toInt()})")
-            }
-            8 -> {
-                // Tap lower area (10% chance) - for bottom nav
-                val x = random.nextInt((screenWidth * 0.3f).toInt(), (screenWidth * 0.7f).toInt()).toFloat()
-                val y = random.nextInt((screenHeight * 0.75f).toInt(), (screenHeight * 0.85f).toInt()).toFloat()
-                performClick(x, y)
-                Log.d(TAG, "👆 Gesture #$gestureCount: TAP LOWER at (${x.toInt()}, ${y.toInt()})")
-            }
             9 -> {
-                // Light swipe left (10% chance) - for carousels/tabs
+                // 10% - Swipe left
                 val startX = screenWidth * 0.7f
                 val endX = screenWidth * 0.3f
                 val y = screenHeight * 0.5f
                 performSwipe(startX, y, endX, y, 200)
                 Log.d(TAG, "👈 Gesture #$gestureCount: SWIPE LEFT")
             }
+        }
+    }
+    
+    /**
+     * Try to click bottom navigation tabs
+     */
+    private fun clickBottomNavigation(screenWidth: Int, screenHeight: Int): Boolean {
+        try {
+            val rootNode = rootInActiveWindow ?: return false
+            val bottomNodes = mutableListOf<android.view.accessibility.AccessibilityNodeInfo>()
+            
+            // Find clickable elements in bottom 15% of screen
+            findBottomElements(rootNode, bottomNodes, screenHeight)
+            
+            if (bottomNodes.isEmpty()) {
+                rootNode.recycle()
+                return false
+            }
+            
+            // Filter for likely navigation items
+            val navNodes = bottomNodes.filter { node ->
+                val className = node.className?.toString() ?: ""
+                val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+                
+                className.contains("Tab") || 
+                className.contains("BottomNavigationItemView") ||
+                desc.contains("tab") || desc.contains("navigation")
+            }
+            
+            val targetNode = (if (navNodes.isNotEmpty()) navNodes else bottomNodes).randomOrNull()
+            
+            if (targetNode != null) {
+                val bounds = Rect()
+                targetNode.getBoundsInScreen(bounds)
+                val text = targetNode.text?.toString() ?: targetNode.contentDescription?.toString() ?: "Nav"
+                Log.d(TAG, "📱 Bottom nav: '$text'")
+                
+                bottomNodes.forEach { it.recycle() }
+                rootNode.recycle()
+                
+                return performClick(bounds.centerX().toFloat(), bounds.centerY().toFloat())
+            }
+            
+            bottomNodes.forEach { it.recycle() }
+            rootNode.recycle()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clicking bottom nav", e)
+        }
+        return false
+    }
+    
+    /**
+     * Try to click floating action button (FAB)
+     */
+    private fun clickFloatingActionButton(screenWidth: Int, screenHeight: Int): Boolean {
+        try {
+            val rootNode = rootInActiveWindow ?: return false
+            val fabNodes = mutableListOf<android.view.accessibility.AccessibilityNodeInfo>()
+            
+            findFabElements(rootNode, fabNodes)
+            
+            if (fabNodes.isEmpty()) {
+                rootNode.recycle()
+                return false
+            }
+            
+            val fabNode = fabNodes.firstOrNull()
+            if (fabNode != null) {
+                val bounds = Rect()
+                fabNode.getBoundsInScreen(bounds)
+                Log.d(TAG, "🔘 FAB found at (${bounds.centerX()}, ${bounds.centerY()})")
+                
+                fabNodes.forEach { it.recycle() }
+                rootNode.recycle()
+                
+                return performClick(bounds.centerX().toFloat(), bounds.centerY().toFloat())
+            }
+            
+            fabNodes.forEach { it.recycle() }
+            rootNode.recycle()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clicking FAB", e)
+        }
+        return false
+    }
+    
+    /**
+     * Try to click toolbar/action bar buttons
+     */
+    private fun clickToolbarButtons(screenWidth: Int, screenHeight: Int): Boolean {
+        try {
+            val rootNode = rootInActiveWindow ?: return false
+            val toolbarNodes = mutableListOf<android.view.accessibility.AccessibilityNodeInfo>()
+            
+            // Find clickable elements in top 15% of screen
+            findTopElements(rootNode, toolbarNodes, screenHeight)
+            
+            if (toolbarNodes.isEmpty()) {
+                rootNode.recycle()
+                return false
+            }
+            
+            // Filter out back/close buttons, prefer action buttons
+            val actionNodes = toolbarNodes.filter { node ->
+                val text = node.text?.toString()?.lowercase() ?: ""
+                val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+                
+                !text.contains("back") && !text.contains("close") && 
+                !desc.contains("back") && !desc.contains("navigate up") &&
+                !desc.contains("close")
+            }
+            
+            val targetNode = (if (actionNodes.isNotEmpty()) actionNodes else toolbarNodes).randomOrNull()
+            
+            if (targetNode != null) {
+                val bounds = Rect()
+                targetNode.getBoundsInScreen(bounds)
+                val text = targetNode.text?.toString() ?: targetNode.contentDescription?.toString() ?: "Action"
+                Log.d(TAG, "🔝 Toolbar: '$text'")
+                
+                toolbarNodes.forEach { it.recycle() }
+                rootNode.recycle()
+                
+                return performClick(bounds.centerX().toFloat(), bounds.centerY().toFloat())
+            }
+            
+            toolbarNodes.forEach { it.recycle() }
+            rootNode.recycle()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clicking toolbar", e)
+        }
+        return false
+    }
+    
+    /**
+     * Find elements in bottom area of screen
+     */
+    private fun findBottomElements(
+        node: android.view.accessibility.AccessibilityNodeInfo,
+        result: MutableList<android.view.accessibility.AccessibilityNodeInfo>,
+        screenHeight: Int
+    ) {
+        try {
+            if (result.size > 20) return
+            
+            if (node.isClickable && node.isVisibleToUser && node.isEnabled) {
+                val bounds = Rect()
+                node.getBoundsInScreen(bounds)
+                
+                // Bottom 15% of screen
+                if (bounds.centerY() > screenHeight * 0.85) {
+                    result.add(node)
+                }
+            }
+            
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                findBottomElements(child, result, screenHeight)
+            }
+        } catch (e: Exception) {
+            // Silent fail
+        }
+    }
+    
+    /**
+     * Find floating action button elements
+     */
+    private fun findFabElements(
+        node: android.view.accessibility.AccessibilityNodeInfo,
+        result: MutableList<android.view.accessibility.AccessibilityNodeInfo>
+    ) {
+        try {
+            if (result.size > 5) return
+            
+            val className = node.className?.toString() ?: ""
+            
+            if (node.isClickable && node.isVisibleToUser && node.isEnabled &&
+                (className.contains("FloatingActionButton") || className.contains("FAB"))) {
+                result.add(node)
+            }
+            
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                findFabElements(child, result)
+            }
+        } catch (e: Exception) {
+            // Silent fail
+        }
+    }
+    
+    /**
+     * Find elements in top area of screen (toolbar)
+     */
+    private fun findTopElements(
+        node: android.view.accessibility.AccessibilityNodeInfo,
+        result: MutableList<android.view.accessibility.AccessibilityNodeInfo>,
+        screenHeight: Int
+    ) {
+        try {
+            if (result.size > 15) return
+            
+            if (node.isClickable && node.isVisibleToUser && node.isEnabled) {
+                val bounds = Rect()
+                node.getBoundsInScreen(bounds)
+                
+                // Top 15% of screen
+                if (bounds.centerY() < screenHeight * 0.15) {
+                    result.add(node)
+                }
+            }
+            
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                findTopElements(child, result, screenHeight)
+            }
+        } catch (e: Exception) {
+            // Silent fail
+        }
+    }
+    
+    /**
+     * Find and click a random clickable UI element
+     */
+    private fun clickRandomClickableElement(): Boolean {
+        try {
+            val rootNode = rootInActiveWindow ?: return false
+            val clickableNodes = mutableListOf<android.view.accessibility.AccessibilityNodeInfo>()
+            
+            // Recursively find all clickable nodes (with limit to avoid slowness)
+            findClickableNodes(rootNode, clickableNodes, maxDepth = 15)
+            
+            if (clickableNodes.isEmpty()) {
+                Log.d(TAG, "⚠️ No clickable elements found")
+                rootNode.recycle()
+                return false
+            }
+            
+            Log.d(TAG, "📊 Found ${clickableNodes.size} clickable elements")
+            
+            // Simple filter - just avoid back/close buttons
+            val safeNodes = clickableNodes.filter { node ->
+                val text = node.text?.toString()?.lowercase() ?: ""
+                val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+                
+                val isDangerous = text.contains("back") || text.contains("close") || 
+                                 text.contains("exit") || desc.contains("back") || 
+                                 desc.contains("close") || desc.contains("navigate up")
+                
+                !isDangerous && node.isVisibleToUser
+            }
+            
+            val targetNodes = if (safeNodes.isNotEmpty()) safeNodes else clickableNodes.take(10)
+            
+            if (targetNodes.isEmpty()) {
+                clickableNodes.forEach { it.recycle() }
+                rootNode.recycle()
+                return false
+            }
+            
+            // Pick random element and click it
+            val randomNode = targetNodes.random()
+            val bounds = Rect()
+            randomNode.getBoundsInScreen(bounds)
+            
+            val centerX = bounds.centerX().toFloat()
+            val centerY = bounds.centerY().toFloat()
+            
+            val text = randomNode.text?.toString() ?: randomNode.contentDescription?.toString() ?: "Unknown"
+            Log.d(TAG, "🎯 Clicking UI: '$text' at ($centerX, $centerY)")
+            
+            // Cleanup
+            clickableNodes.forEach { it.recycle() }
+            rootNode.recycle()
+            
+            return performClick(centerX, centerY)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error finding clickable: ${e.message}")
+            return false
+        }
+    }
+    
+    /**
+     * Recursively find all clickable nodes in the view hierarchy
+     */
+    private fun findClickableNodes(
+        node: android.view.accessibility.AccessibilityNodeInfo,
+        result: MutableList<android.view.accessibility.AccessibilityNodeInfo>,
+        maxDepth: Int = 15,
+        currentDepth: Int = 0
+    ) {
+        try {
+            if (currentDepth > maxDepth) return
+            if (result.size > 50) return // Max 50 elements for speed
+            
+            if (node.isClickable && node.isVisibleToUser && node.isEnabled) {
+                result.add(node)
+            }
+            
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                findClickableNodes(child, result, maxDepth, currentDepth + 1)
+            }
+        } catch (e: Exception) {
+            // Silent fail untuk speed
         }
     }
     
