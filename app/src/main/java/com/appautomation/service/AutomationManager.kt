@@ -127,7 +127,14 @@ class AutomationManager @Inject constructor(
             
             // Start random interactions if accessibility service is enabled
             val accessibilityService = AutomationAccessibilityService.getInstance()
-            accessibilityService?.startRandomInteractions(INTERACTION_INTERVAL_SECONDS)
+            if (accessibilityService != null) {
+                accessibilityService.startRandomInteractions(INTERACTION_INTERVAL_SECONDS)
+                Log.d(TAG, "✅ Random interactions started (every ${INTERACTION_INTERVAL_SECONDS}s)")
+            } else {
+                Log.e(TAG, "❌ CRITICAL: Accessibility service not available!")
+                Log.e(TAG, "❌ Service instance is NULL - gestures will NOT work!")
+                Log.e(TAG, "❌ Please enable Accessibility Service in Settings")
+            }
             
             // Run timer with countdown
             val startTime = System.currentTimeMillis()

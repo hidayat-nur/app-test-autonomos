@@ -25,6 +25,7 @@ class AutomationAccessibilityService : AccessibilityService() {
     
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var gestureJob: Job? = null
+    private var gestureCount = 0
     
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -63,18 +64,20 @@ class AutomationAccessibilityService : AccessibilityService() {
                 .addStroke(GestureDescription.StrokeDescription(path, 0, duration))
                 .build()
             
+            var success = false
             dispatchGesture(gesture, object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
-                    Log.d(TAG, "Click gesture completed at ($x, $y)")
+                    success = true
+                    Log.d(TAG, "✅ Click gesture completed at ($x, $y)")
                 }
                 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
-                    Log.w(TAG, "Click gesture cancelled")
+                    Log.e(TAG, "❌ Click gesture CANCELLED at ($x, $y)")
                 }
             }, null)
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to perform click", e)
+            Log.e(TAG, "❌ FAILED to perform click: ${e.message}", e)
             false
         }
     }
@@ -149,13 +152,24 @@ class AutomationAccessibilityService : AccessibilityService() {
     /**
      * Perform random interactions (clicks and scrolls)
      */
-    fun startRandomInteractions(intervalSeconds: Int = 15) {
+    fun startRandomInteractions(intervalSeconds: Int = 5) {
         stopRandomInteractions()
         
+        Log.d(TAG, "🎮 Starting random interactions (interval: ${intervalSeconds}s)")
+        Log.d(TAG, "📱 Service instance: ${if (instance != null) "ACTIVE" else "NULL"}")
+        
+        // Perform first gesture immediately to test
+        serviceScope.launch {
+            delay(2000) // Wait 2 seconds then do first gesture
+            Log.d(TAG, "🔥 Performing FIRST gesture immediately...")
+            performRandomGesture()
+        }
+        
         gestureJob = serviceScope.launch {
+            delay(intervalSeconds * 1000L) // Skip first interval since we did immediate gesture
             while (isActive) {
-                delay(intervalSeconds * 1000L)
                 performRandomGesture()
+                delay(intervalSeconds * 1000L)
             }
         }
     }
@@ -164,36 +178,66 @@ class AutomationAccessibilityService : AccessibilityService() {
      * Stop random interactions
      */
     fun stopRandomInteractions() {
+        if (gestureJob != null) {
+            Log.d(TAG, "🛑 Stopping random interactions (performed $gestureCount gestures)")
+            gestureCount = 0
+        }
         gestureJob?.cancel()
         gestureJob = null
     }
     
     /**
-     * Perform a random gesture (tap or scroll)
+     * Perform a random gesture (tap, scroll, swipe)
      */
     private fun performRandomGesture() {
+        gestureCount++
         val displayMetrics: DisplayMetrics = resources.displayMetrics
         val screenHeight = displayMetrics.heightPixels
         val screenWidth = displayMetrics.widthPixels
         
         val random = Random.Default
-        val gestureType = random.nextInt(3) // 0: tap, 1: scroll down, 2: scroll up
+        val gestureType = random.nextInt(7) // 0-6: multiple gesture types
         
         when (gestureType) {
-            0 -> {
-                // Random tap in safe zone (avoid edges and status bar)
+            0, 1 -> {
+                // Random tap in safe zone (higher probability)
                 val x = random.nextInt(screenWidth / 4, screenWidth * 3 / 4).toFloat()
                 val y = random.nextInt(screenHeight / 4, screenHeight * 3 / 4).toFloat()
                 performClick(x, y)
-                Log.d(TAG, "Random tap at ($x, $y)")
-            }
-            1 -> {
-                scrollDown()
-                Log.d(TAG, "Random scroll down")
+                Log.d(TAG, "👆 Gesture #$gestureCount: Random TAP at (${x.toInt()}, ${y.toInt()})")
             }
             2 -> {
+                // Scroll down
+                scrollDown()
+                Log.d(TAG, "👇 Gesture #$gestureCount: SCROLL DOWN")
+            }
+            3 -> {
+                // Scroll up
                 scrollUp()
-                Log.d(TAG, "Random scroll up")
+                Log.d(TAG, "👆 Gesture #$gestureCount: SCROLL UP")
+            }
+            4 -> {
+                // Swipe right (like switching tabs or going back)
+                val startX = screenWidth * 0.2f
+                val endX = screenWidth * 0.8f
+                val y = screenHeight * 0.5f
+                performSwipe(startX, y, endX, y, 300)
+                Log.d(TAG, "👉 Gesture #$gestureCount: SWIPE RIGHT")
+            }
+            5 -> {
+                // Swipe left (like switching tabs)
+                val startX = screenWidth * 0.8f
+                val endX = screenWidth * 0.2f
+                val y = screenHeight * 0.5f
+                performSwipe(startX, y, endX, y, 300)
+                Log.d(TAG, "👈 Gesture #$gestureCount: SWIPE LEFT")
+            }
+            6 -> {
+                // Double tap in center
+                val x = screenWidth * 0.5f
+                val y = screenHeight * 0.5f
+                performClick(x, y, 50)
+                Log.d(TAG, "👆👆 Gesture #$gestureCount: DOUBLE TAP (center)")
             }
         }
     }

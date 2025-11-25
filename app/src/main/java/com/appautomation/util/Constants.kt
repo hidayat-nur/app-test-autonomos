@@ -10,8 +10,8 @@ object Constants {
     const val MAX_DURATION_MINUTES = 60
     
     // Interaction settings
-    const val DEFAULT_INTERACTION_INTERVAL_SECONDS = 15
-    const val MIN_INTERACTION_INTERVAL_SECONDS = 5
+    const val DEFAULT_INTERACTION_INTERVAL_SECONDS = 5
+    const val MIN_INTERACTION_INTERVAL_SECONDS = 3
     const val MAX_INTERACTION_INTERVAL_SECONDS = 60
     
     // Shared preferences
