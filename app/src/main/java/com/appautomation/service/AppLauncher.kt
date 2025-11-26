@@ -113,4 +113,23 @@ class AppLauncher @Inject constructor(
             Log.e(TAG, "Failed to go home", e)
         }
     }
+
+    /**
+     * Request to uninstall an app by package name.
+     * This will show the system uninstall dialog to the user.
+     */
+    fun requestUninstallApp(packageName: String): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_DELETE).apply {
+                data = android.net.Uri.parse("package:$packageName")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+            Log.d(TAG, "Requested uninstall for: $packageName")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to request uninstall for $packageName", e)
+            false
+        }
+    }
 }

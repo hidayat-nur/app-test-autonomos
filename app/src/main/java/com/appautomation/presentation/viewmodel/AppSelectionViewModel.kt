@@ -293,4 +293,37 @@ class AppSelectionViewModel @Inject constructor(
     fun isAppTestedToday(packageName: String): Boolean {
         return _testedAppsToday.value.contains(packageName)
     }
+
+    /**
+     * Request uninstall for all currently selected apps.
+     * Each app will trigger the system uninstall dialog one by one.
+     * Returns the list of package names that were requested for uninstall.
+     */
+    fun getSelectedPackagesForUninstall(): List<String> {
+        return _selectedApps.value.keys.toList()
+    }
+
+    /**
+     * Request uninstall for a single app and remove it from selection.
+     */
+    fun requestUninstallApp(packageName: String): Boolean {
+        val result = appLauncher.requestUninstallApp(packageName)
+        if (result) {
+            // Remove from selection
+            val currentMap = _selectedApps.value.toMutableMap()
+            currentMap.remove(packageName)
+            _selectedApps.value = currentMap
+            saveSelections()
+        }
+        return result
+    }
+
+    /**
+     * Request uninstall for the first selected app (for sequential uninstall flow).
+     * Returns the package name if successful, null otherwise.
+     */
+    fun requestUninstallFirstSelected(): String? {
+        val firstPackage = _selectedApps.value.keys.firstOrNull() ?: return null
+        return if (requestUninstallApp(firstPackage)) firstPackage else null
+    }
 }

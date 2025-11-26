@@ -45,6 +45,8 @@ fun AppSelectionScreen(
     var showBatchSizeDialog by remember { mutableStateOf(false) }
     var showBatchList by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
+    var showUninstallConfirmDialog by remember { mutableStateOf(false) }
+    var uninstallInProgress by remember { mutableStateOf(false) }
     
     val filteredApps = remember(installedApps, searchQuery) {
         if (searchQuery.isEmpty()) {
@@ -98,11 +100,15 @@ fun AppSelectionScreen(
                         )
                     }
                     if (selectedApps.isNotEmpty()) {
+                        // Uninstall button
+                        IconButton(onClick = { showUninstallConfirmDialog = true }) {
+                            Icon(Icons.Default.Delete, "Uninstall selected apps")
+                        }
                         TextButton(onClick = { 
                             viewModel.clearAll()
                             viewModel.resetBatchIndex()
                         }) {
-                            Text("Clear All")
+                            Text("Clear")
                         }
                     }
                     IconButton(onClick = { viewModel.selectAll() }) {
@@ -329,6 +335,43 @@ fun AppSelectionScreen(
             onConfirm = { newSize ->
                 viewModel.updateBatchSize(newSize)
                 showBatchSizeDialog = false
+            }
+        )
+    }
+
+    // Uninstall confirmation dialog
+    if (showUninstallConfirmDialog) {
+        val appsToUninstall = selectedApps.size
+        AlertDialog(
+            onDismissRequest = { showUninstallConfirmDialog = false },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+            title = { Text("Uninstall $appsToUninstall app${if (appsToUninstall > 1) "s" else ""}?") },
+            text = { 
+                Column {
+                    Text("This will uninstall the selected apps from your device.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Each app will show the system uninstall dialog. You need to confirm each uninstall.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showUninstallConfirmDialog = false
+                        // Start uninstalling first selected app
+                        viewModel.requestUninstallFirstSelected()
+                    }
+                ) {
+                    Text("Uninstall")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUninstallConfirmDialog = false }) {
+                    Text("Cancel")
+                }
             }
         )
     }
