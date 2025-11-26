@@ -100,51 +100,53 @@ class AutomationManager @Inject constructor(
         
         for ((index, appTask) in apps.withIndex()) {
             if (!isActive) break
-            
-            Log.d(TAG, "Starting automation for ${appTask.appName} (${index + 1}/$totalCount)")
-            
-            // Launch the app
-            val launched = launchAppWithRetry(appTask.packageName, MAX_LAUNCH_RETRIES)
-            if (!launched) {
-                val errorMsg = "Failed to launch ${appTask.appName}"
-                Log.e(TAG, errorMsg)
-                
-                // Log the failure
-                repository.logAutomation(
-                    AutomationLog(
-                        timestamp = System.currentTimeMillis(),
-                        appPackage = appTask.packageName,
-                        appName = appTask.appName,
-                        durationMillis = 0,
-                        success = false,
-                        errorMessage = errorMsg
-                    )
-                )
-                
-                _automationState.value = AutomationState.Error(errorMsg)
-                return
-            }
-            
-            // Start random interactions if accessibility service is enabled
-            val accessibilityService = AutomationAccessibilityService.getInstance()
-            if (accessibilityService != null) {
-                accessibilityService.startRandomInteractions(500, appTask.packageName) // Pass package name for monitoring
-                Log.d(TAG, "✅ Random interactions started (every 500ms) for ${appTask.packageName}")
-            } else {
-                Log.e(TAG, "❌ CRITICAL: Accessibility service not available!")
-                Log.e(TAG, "❌ Service instance is NULL - gestures will NOT work!")
-                Log.e(TAG, "❌ Please enable Accessibility Service in Settings")
-            }
-            
-            // Run timer with countdown
-            val startTime = System.currentTimeMillis()
-            val endTime = startTime + appTask.durationMillis
-            
+
+            val appStartTime = System.currentTimeMillis()
+            var accessibilityService: AutomationAccessibilityService? = null
+
             try {
+                Log.d(TAG, "Starting automation for ${appTask.appName} (${index + 1}/$totalCount)")
+
+                // Launch the app
+                val launched = launchAppWithRetry(appTask.packageName, MAX_LAUNCH_RETRIES)
+                if (!launched) {
+                    val errorMsg = "Failed to launch ${appTask.appName}"
+                    Log.e(TAG, errorMsg)
+
+                    // Log the failure but DO NOT stop automation
+                    repository.logAutomation(
+                        AutomationLog(
+                            timestamp = System.currentTimeMillis(),
+                            appPackage = appTask.packageName,
+                            appName = appTask.appName,
+                            durationMillis = 0,
+                            success = false,
+                            errorMessage = errorMsg
+                        )
+                    )
+
+                    Log.w(TAG, "⏭️ Skipping ${appTask.appName}, continuing to next app...")
+                    continue // Move to next app instead of stopping
+                }
+
+                // Start random interactions if accessibility service is enabled
+                accessibilityService = AutomationAccessibilityService.getInstance()
+                if (accessibilityService != null) {
+                    accessibilityService.startRandomInteractions(500, appTask.packageName)
+                    Log.d(TAG, "✅ Random interactions started (every 500ms) for ${appTask.packageName}")
+                } else {
+                    Log.e(TAG, "❌ CRITICAL: Accessibility service not available!")
+                    Log.e(TAG, "❌ Service instance is NULL - gestures will NOT work!")
+                    Log.e(TAG, "❌ Please enable Accessibility Service in Settings")
+                }
+
+                // Run timer with countdown - MUST complete regardless of app state
+                val endTime = appStartTime + appTask.durationMillis
+
                 while (System.currentTimeMillis() < endTime && isActive) {
                     val remaining = endTime - System.currentTimeMillis()
                     val elapsed = System.currentTimeMillis() - sessionStartTime
-                    
+
                     _automationState.value = AutomationState.Running(
                         currentApp = appTask,
                         remainingTimeMillis = remaining.coerceAtLeast(0),
@@ -153,16 +155,16 @@ class AutomationManager @Inject constructor(
                         completedCount = completedCount,
                         totalCount = totalCount
                     )
-                    
+
                     delay(1000) // Update every second
                 }
-                
-                // Stop interactions
+
+                // Stop interactions after timer completes
                 accessibilityService?.stopRandomInteractions()
-                
+
                 if (isActive) {
                     completedCount++
-                    
+
                     // Log success
                     repository.logAutomation(
                         AutomationLog(
@@ -173,16 +175,36 @@ class AutomationManager @Inject constructor(
                             success = true
                         )
                     )
-                    
-                    Log.d(TAG, "Completed ${appTask.appName}")
+
+                    Log.d(TAG, "✅ Completed ${appTask.appName}")
                 }
+
             } catch (e: CancellationException) {
+                // Only re-throw cancellation (user stopped automation)
                 accessibilityService?.stopRandomInteractions()
                 throw e
+            } catch (e: Exception) {
+                // Catch ANY other exception - log it but continue to next app
+                Log.e(TAG, "❌ Error during automation for ${appTask.appName}", e)
+                accessibilityService?.stopRandomInteractions()
+
+                repository.logAutomation(
+                    AutomationLog(
+                        timestamp = System.currentTimeMillis(),
+                        appPackage = appTask.packageName,
+                        appName = appTask.appName,
+                        durationMillis = System.currentTimeMillis() - appStartTime,
+                        success = false,
+                        errorMessage = e.message ?: "Runtime error"
+                    )
+                )
+
+                Log.w(TAG, "⏭️ Error handled, continuing to next app...")
+                // Do NOT break or return - continue to next app
             }
-            
+
             // Small delay between apps
-            if (index < apps.size - 1) {
+            if (index < apps.size - 1 && isActive) {
                 delay(1000)
             }
         }
