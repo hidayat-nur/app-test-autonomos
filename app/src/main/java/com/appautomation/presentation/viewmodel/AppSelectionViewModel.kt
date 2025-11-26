@@ -326,4 +326,46 @@ class AppSelectionViewModel @Inject constructor(
         val firstPackage = _selectedApps.value.keys.firstOrNull() ?: return null
         return if (requestUninstallApp(firstPackage)) firstPackage else null
     }
+    
+    /**
+     * Uninstall all selected apps one by one.
+     * Each app will trigger the system uninstall dialog.
+     */
+    fun uninstallAllSelected() {
+        viewModelScope.launch(Dispatchers.Main) {
+            val packagesToUninstall = _selectedApps.value.keys.toList()
+            for (packageName in packagesToUninstall) {
+                requestUninstallApp(packageName)
+                // Small delay between uninstalls to allow system dialog to appear
+                kotlinx.coroutines.delay(500)
+            }
+        }
+    }
+    
+    /**
+     * Refresh the installed apps list and remove uninstalled apps from selection.
+     * This is called after uninstall to update the UI.
+     */
+    fun refreshInstalledApps() {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Reload all installed apps
+            val apps = appLauncher.getInstalledApps(false)
+            _installedApps.value = apps
+            
+            // Remove uninstalled apps from selection
+            val installedPackages = apps.map { it.packageName }.toSet()
+            val currentSelection = _selectedApps.value.toMutableMap()
+            
+            // Remove apps that are no longer installed
+            val uninstalledPackages = currentSelection.keys.filter { !installedPackages.contains(it) }
+            uninstalledPackages.forEach { pkg ->
+                currentSelection.remove(pkg)
+            }
+            
+            if (uninstalledPackages.isNotEmpty()) {
+                _selectedApps.value = currentSelection
+                saveSelections()
+            }
+        }
+    }
 }

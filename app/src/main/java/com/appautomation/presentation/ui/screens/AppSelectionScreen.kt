@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,7 +47,15 @@ fun AppSelectionScreen(
     var showBatchList by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showUninstallConfirmDialog by remember { mutableStateOf(false) }
-    var uninstallInProgress by remember { mutableStateOf(false) }
+    var refreshTrigger by remember { mutableStateOf(0) }
+    
+    // Refresh apps list periodically when screen is active
+    LaunchedEffect(refreshTrigger) {
+        if (refreshTrigger > 0) {
+            kotlinx.coroutines.delay(2000) // Wait for uninstall to complete
+            viewModel.refreshInstalledApps()
+        }
+    }
     
     val filteredApps = remember(installedApps, searchQuery) {
         if (searchQuery.isEmpty()) {
@@ -95,6 +104,13 @@ fun AppSelectionScreen(
                             text = { Text("Duration") },
                             onClick = {
                                 showGlobalDurationDialog = true
+                                showSettingsMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🔄 Refresh apps") },
+                            onClick = {
+                                viewModel.refreshInstalledApps()
                                 showSettingsMenu = false
                             }
                         )
@@ -342,29 +358,69 @@ fun AppSelectionScreen(
     // Uninstall confirmation dialog
     if (showUninstallConfirmDialog) {
         val appsToUninstall = selectedApps.size
+        val appsList = selectedApps.values.toList()
+        
         AlertDialog(
             onDismissRequest = { showUninstallConfirmDialog = false },
             icon = { Icon(Icons.Default.Delete, contentDescription = null) },
             title = { Text("Uninstall $appsToUninstall app${if (appsToUninstall > 1) "s" else ""}?") },
             text = { 
                 Column {
-                    Text("This will uninstall the selected apps from your device.")
+                    Text("Selected apps will be uninstalled one by one.")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Show list of apps to uninstall
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            "Apps to uninstall:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        appsList.take(5).forEach { app ->
+                            Text(
+                                "• ${app.appName}",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        if (appsList.size > 5) {
+                            Text(
+                                "... and ${appsList.size - 5} more",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontStyle = FontStyle.Italic
+                            )
+                        }
+                    }
+                    
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Each app will show the system uninstall dialog. You need to confirm each uninstall.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "⚠️ Note: You can only uninstall apps that you installed. System apps and pre-installed apps cannot be uninstalled.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         showUninstallConfirmDialog = false
-                        // Start uninstalling first selected app
-                        viewModel.requestUninstallFirstSelected()
-                    }
+                        // Uninstall apps one by one
+                        viewModel.uninstallAllSelected()
+                        // Trigger refresh after uninstall
+                        refreshTrigger++
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
                 ) {
+                    Icon(Icons.Default.Delete, "Delete", modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text("Uninstall")
                 }
             },
