@@ -322,6 +322,9 @@ fun AppSelectionScreen(
                             isTestedToday = testedAppsToday.contains(app.packageName),
                             onSelectionChanged = { isSelected ->
                                 viewModel.toggleAppSelection(app, isSelected)
+                            },
+                            onOpenPlayStore = {
+                                viewModel.openAppInPlayStore(app.packageName)
                             }
                         )
                         Divider()
@@ -438,7 +441,8 @@ fun AppSelectionItem(
     app: AppInfo,
     isSelected: Boolean,
     isTestedToday: Boolean,
-    onSelectionChanged: (Boolean) -> Unit
+    onSelectionChanged: (Boolean) -> Unit,
+    onOpenPlayStore: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -510,6 +514,19 @@ fun AppSelectionItem(
                 app.packageName,
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        // Play Store icon button
+        IconButton(
+            onClick = { onOpenPlayStore() },
+            modifier = Modifier.size(40.dp)
+        ) {
+            Icon(
+                Icons.Default.ShoppingCart,
+                contentDescription = "Open in Play Store",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
             )
         }
     }

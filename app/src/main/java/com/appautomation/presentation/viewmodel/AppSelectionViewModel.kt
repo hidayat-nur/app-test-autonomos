@@ -368,4 +368,11 @@ class AppSelectionViewModel @Inject constructor(
             }
         }
     }
+    
+    /**
+     * Open app page in Google Play Store
+     */
+    fun openAppInPlayStore(packageName: String) {
+        appLauncher.openInPlayStore(packageName)
+    }
 }

@@ -132,4 +132,34 @@ class AppLauncher @Inject constructor(
             false
         }
     }
+    
+    /**
+     * Open app page in Google Play Store
+     */
+    fun openInPlayStore(packageName: String): Boolean {
+        return try {
+            // Try to open in Play Store app first
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                data = android.net.Uri.parse("market://details?id=$packageName")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+            Log.d(TAG, "Opened Play Store for: $packageName")
+            true
+        } catch (e: Exception) {
+            // If Play Store app not available, open in browser
+            try {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    data = android.net.Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+                Log.d(TAG, "Opened Play Store in browser for: $packageName")
+                true
+            } catch (e2: Exception) {
+                Log.e(TAG, "Failed to open Play Store for $packageName", e2)
+                false
+            }
+        }
+    }
 }
