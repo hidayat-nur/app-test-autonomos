@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -95,6 +97,11 @@ dependencies {
     
     // Work Manager
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    
+    // Firebase Crashlytics - Remote Crash Monitoring (FREE!)
+    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation("com.google.firebase:firebase-crashlytics-ktx")
+    implementation("com.google.firebase:firebase-analytics-ktx")
     
     // Testing
     testImplementation("junit:junit:4.13.2")

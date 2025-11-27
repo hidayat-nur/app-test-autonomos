@@ -11,6 +11,7 @@ import android.util.Log
 import android.view.*
 import android.widget.TextView
 import com.appautomation.R
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
@@ -44,20 +45,42 @@ class FloatingTimerService : Service() {
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Log to Crashlytics
+        FirebaseCrashlytics.getInstance().log("FloatingTimer onStartCommand - Device: ${Build.MANUFACTURER} ${Build.MODEL}")
+        
         android.util.Log.d(TAG, "onStartCommand action=${intent?.action}")
         android.util.Log.d(TAG, "Overlay permission=${android.provider.Settings.canDrawOverlays(this)}")
+        
         when (intent?.action) {
             ACTION_SHOW -> {
                 // Check if permission granted
                 if (!android.provider.Settings.canDrawOverlays(this)) {
                     Log.e(TAG, "❌ SYSTEM_ALERT_WINDOW permission not granted!")
+                    
+                    // Report to Crashlytics
+                    FirebaseCrashlytics.getInstance().apply {
+                        setCustomKey("error_location", "FloatingTimer.onStartCommand")
+                        setCustomKey("overlay_permission", false)
+                        log("Overlay permission denied on ${Build.MANUFACTURER} ${Build.MODEL}")
+                    }
+                    
                     stopSelf()
                     return START_NOT_STICKY
                 }
                 
                 if (floatingView == null) {
-                    showFloatingBubble()
-                    startObservingAutomation()
+                    try {
+                        showFloatingBubble()
+                        startObservingAutomation()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to show floating bubble", e)
+                        
+                        // Report to Crashlytics
+                        FirebaseCrashlytics.getInstance().apply {
+                            setCustomKey("error_location", "FloatingTimer.showFloatingBubble")
+                            recordException(e)
+                        }
+                    }
                 }
             }
             ACTION_HIDE -> {
