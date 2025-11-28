@@ -27,17 +27,64 @@ object PermissionHelper {
     
     /**
      * Check if Usage Stats permission is granted
+     * Uses public API checkOpNoThrow (available since API 19) for maximum compatibility
+     * Fixed for Motorola E6, VIVO Y71, and all custom ROMs
      */
     fun hasUsageStatsPermission(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
+            // Usage Stats not available before Android 4.4
+            return false
+        }
+        
         return try {
             val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
-            val mode = appOps?.unsafeCheckOpNoThrow(
+            if (appOps == null) {
+                android.util.Log.e("PermissionHelper", "AppOpsManager not available")
+                return false
+            }
+            
+            // Log to Crashlytics for monitoring
+            try {
+                com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().log(
+                    "Checking UsageStats permission on ${Build.MANUFACTURER} ${Build.MODEL} API ${Build.VERSION.SDK_INT}"
+                )
+            } catch (e: Exception) {
+                // Firebase not available, ignore
+            }
+            
+            // Use checkOpNoThrow - available since API 19 (Android 4.4)
+            // This is the PUBLIC API, not internal like unsafeCheckOpNoThrow
+            @Suppress("DEPRECATION")
+            val mode = appOps.checkOpNoThrow(
                 AppOpsManager.OPSTR_GET_USAGE_STATS,
                 Process.myUid(),
                 context.packageName
             )
-            mode == AppOpsManager.MODE_ALLOWED
+            
+            val hasPermission = mode == AppOpsManager.MODE_ALLOWED
+            
+            // Log result
+            try {
+                com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().apply {
+                    setCustomKey("usage_stats_permission", hasPermission)
+                    setCustomKey("permission_check_method", "checkOpNoThrow")
+                    log("UsageStats permission: $hasPermission")
+                }
+            } catch (e: Exception) {
+                // Firebase not available, ignore
+            }
+            
+            hasPermission
         } catch (e: Exception) {
+            android.util.Log.e("PermissionHelper", "Error checking usage stats permission on ${Build.MANUFACTURER} ${Build.MODEL}", e)
+            
+            // Report to Crashlytics
+            try {
+                com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().recordException(e)
+            } catch (ignored: Exception) {
+                // Firebase not available
+            }
+            
             false
         }
     }

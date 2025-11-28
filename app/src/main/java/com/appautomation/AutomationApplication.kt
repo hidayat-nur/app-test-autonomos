@@ -40,6 +40,15 @@ class AutomationApplication : Application() {
             crashlytics.setCustomKey("brand", Build.BRAND)
             crashlytics.setCustomKey("device", Build.DEVICE)
             
+            // Log if device is problematic (Motorola E6, VIVO Y71, etc)
+            val isProblematic = Build.MANUFACTURER.equals("motorola", ignoreCase = true) ||
+                                Build.MANUFACTURER.equals("vivo", ignoreCase = true)
+            crashlytics.setCustomKey("is_problematic_device", isProblematic)
+            
+            if (isProblematic) {
+                crashlytics.log("⚠️ Problematic device detected: ${Build.MANUFACTURER} ${Build.MODEL} API ${Build.VERSION.SDK_INT}")
+            }
+            
             // Set user ID (optional - bisa pakai random ID)
             crashlytics.setUserId("${Build.MANUFACTURER}_${Build.MODEL}_${System.currentTimeMillis()}")
             
