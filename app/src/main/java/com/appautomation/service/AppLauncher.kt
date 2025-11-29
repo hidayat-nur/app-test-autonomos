@@ -64,6 +64,14 @@ class AppLauncher @Inject constructor(
                         val appInfo = packageManager.getApplicationInfo(packageName, 0)
                         val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                         
+                        // Get install time
+                        val packageInfo = try {
+                            packageManager.getPackageInfo(packageName, 0)
+                        } catch (e: Exception) {
+                            null
+                        }
+                        val installTime = packageInfo?.firstInstallTime ?: 0L
+                        
                         if (!includeSystemApps && isSystemApp) {
                             return@mapNotNull null
                         }
@@ -72,7 +80,8 @@ class AppLauncher @Inject constructor(
                             packageName = packageName,
                             appName = resolveInfo.loadLabel(packageManager).toString(),
                             icon = resolveInfo.loadIcon(packageManager),
-                            isSystemApp = isSystemApp
+                            isSystemApp = isSystemApp,
+                            installTime = installTime
                         )
                     } catch (e: Exception) {
                         Log.e(TAG, "Error loading app info", e)

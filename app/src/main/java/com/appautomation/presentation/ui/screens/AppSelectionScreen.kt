@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.appautomation.data.model.AppInfo
+import com.appautomation.data.model.AppSortOption
 import com.appautomation.presentation.viewmodel.AppSelectionViewModel
 import com.appautomation.service.AutomationForegroundService
 import com.appautomation.util.Constants
@@ -41,12 +42,14 @@ fun AppSelectionScreen(
     val batchSize by viewModel.batchSize.collectAsState()
     val currentBatchIndex by viewModel.currentBatchIndex.collectAsState()
     val testedAppsToday by viewModel.testedAppsToday.collectAsState()
+    val sortOption by viewModel.sortOption.collectAsState()
     
     var showGlobalDurationDialog by remember { mutableStateOf(false) }
     var showBatchSizeDialog by remember { mutableStateOf(false) }
     var showBatchList by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showUninstallConfirmDialog by remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
     var refreshTrigger by remember { mutableStateOf(0) }
     
     // Refresh apps list periodically when screen is active
@@ -302,6 +305,81 @@ fun AppSelectionScreen(
                 },
                 singleLine = true
             )
+            
+            // Sort options
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sort by: ${sortOption.displayName}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                IconButton(onClick = { showSortMenu = !showSortMenu }) {
+                    Icon(Icons.Default.MoreVert, "Sort options")
+                }
+                
+                DropdownMenu(
+                    expanded = showSortMenu,
+                    onDismissRequest = { showSortMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Name (A-Z)") },
+                        onClick = {
+                            viewModel.setSortOption(AppSortOption.NAME_ASC)
+                            showSortMenu = false
+                        },
+                        leadingIcon = {
+                            if (sortOption == AppSortOption.NAME_ASC) {
+                                Icon(Icons.Default.Check, "Selected")
+                            }
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Name (Z-A)") },
+                        onClick = {
+                            viewModel.setSortOption(AppSortOption.NAME_DESC)
+                            showSortMenu = false
+                        },
+                        leadingIcon = {
+                            if (sortOption == AppSortOption.NAME_DESC) {
+                                Icon(Icons.Default.Check, "Selected")
+                            }
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Newest installed") },
+                        onClick = {
+                            viewModel.setSortOption(AppSortOption.INSTALL_NEWEST)
+                            showSortMenu = false
+                        },
+                        leadingIcon = {
+                            if (sortOption == AppSortOption.INSTALL_NEWEST) {
+                                Icon(Icons.Default.Check, "Selected")
+                            }
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Oldest installed") },
+                        onClick = {
+                            viewModel.setSortOption(AppSortOption.INSTALL_OLDEST)
+                            showSortMenu = false
+                        },
+                        leadingIcon = {
+                            if (sortOption == AppSortOption.INSTALL_OLDEST) {
+                                Icon(Icons.Default.Check, "Selected")
+                            }
+                        }
+                    )
+                }
+            }
+            
+            Divider(modifier = Modifier.padding(horizontal = 16.dp))
             
             if (isLoading) {
                 Box(

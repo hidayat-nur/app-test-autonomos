@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appautomation.data.model.AppInfo
+import com.appautomation.data.model.AppSortOption
 import com.appautomation.data.model.AppTask
 import com.appautomation.service.AppLauncher
 import com.appautomation.service.AutomationManager
@@ -52,6 +53,9 @@ class AppSelectionViewModel @Inject constructor(
     
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    
+    private val _sortOption = MutableStateFlow(AppSortOption.INSTALL_OLDEST)
+    val sortOption: StateFlow<AppSortOption> = _sortOption.asStateFlow()
     
     private val _testedAppsToday = MutableStateFlow<Set<String>>(emptySet())
     val testedAppsToday: StateFlow<Set<String>> = _testedAppsToday.asStateFlow()
@@ -116,8 +120,26 @@ class AppSelectionViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             val apps = appLauncher.getInstalledApps(includeSystemApps)
-            _installedApps.value = apps
+            _installedApps.value = sortApps(apps, _sortOption.value)
             _isLoading.value = false
+        }
+    }
+    
+    fun setSortOption(option: AppSortOption) {
+        _sortOption.value = option
+        // Re-sort current list
+        _installedApps.value = sortApps(_installedApps.value, option)
+        
+        // Save preference
+        prefs.edit().putString("sort_option", option.name).apply()
+    }
+    
+    private fun sortApps(apps: List<AppInfo>, option: AppSortOption): List<AppInfo> {
+        return when (option) {
+            AppSortOption.NAME_ASC -> apps.sortedBy { it.appName.lowercase() }
+            AppSortOption.NAME_DESC -> apps.sortedByDescending { it.appName.lowercase() }
+            AppSortOption.INSTALL_NEWEST -> apps.sortedByDescending { it.installTime }
+            AppSortOption.INSTALL_OLDEST -> apps.sortedBy { it.installTime }
         }
     }
     
