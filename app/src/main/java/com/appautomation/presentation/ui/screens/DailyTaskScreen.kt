@@ -45,11 +45,16 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import com.appautomation.data.model.DailyTask
 import com.appautomation.data.model.TaskType
 import com.appautomation.presentation.viewmodel.DailyTaskViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 // Helper function to check if app is installed
@@ -65,7 +70,8 @@ fun isAppInstalled(packageManager: PackageManager, packageName: String): Boolean
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DailyTaskScreen(
-    viewModel: DailyTaskViewModel = hiltViewModel()
+    viewModel: DailyTaskViewModel = hiltViewModel(),
+    onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -130,6 +136,11 @@ fun DailyTaskScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Daily Tasks") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
                 actions = {
                     Button(onClick = {
                         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -142,8 +153,21 @@ fun DailyTaskScreen(
                     }) {
                         Text("<")
                     }
+                    
+                    // Format date for display: "2 Des 25"
+                    val displayDate = remember(selectedDate) {
+                        try {
+                            val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                            val date = inputFormat.parse(selectedDate)
+                            val outputFormat = SimpleDateFormat("d MMM yy", Locale("id", "ID"))
+                            outputFormat.format(date ?: Date())
+                        } catch (e: Exception) {
+                            selectedDate
+                        }
+                    }
+                    
                     Text(
-                        text = selectedDate,
+                        text = displayDate,
                         modifier = Modifier.padding(horizontal = 8.dp),
                         fontWeight = FontWeight.Bold
                     )
@@ -182,7 +206,7 @@ fun DailyTaskScreen(
                 if (deleteApps.isNotEmpty()) {
                     // Header
                     item {
-                        SectionHeader("Hapus App Baru")
+                        SectionHeader("Hapus App")
                     }
                     
                     // Select All + Delete Selected button in fixed row

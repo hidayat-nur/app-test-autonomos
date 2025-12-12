@@ -105,7 +105,11 @@ fun MainNavigation() {
         }
         
         composable("daily_tasks") {
-            DailyTaskScreen()
+            DailyTaskScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
         
         composable("monitoring") {
