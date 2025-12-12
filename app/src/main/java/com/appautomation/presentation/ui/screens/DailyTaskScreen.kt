@@ -343,10 +343,23 @@ fun DailyTaskScreen(
                             context.startActivity(intent)
                         }
                     }
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
+                }
+
+                // Section: Notes (NOTES)
+                val notes = tasksGrouped[TaskType.NOTES] ?: emptyList()
+                if (notes.isNotEmpty()) {
+                    item {
+                        SectionHeader("Notes")
+                    }
+                    items(notes) { task ->
+                        NoteTaskItem(task)
+                    }
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
                 }
 
                 // Empty state
-                if (deleteApps.isEmpty() && rateApps.isEmpty() && testApps.isEmpty() && updateApps.isEmpty()) {
+                if (deleteApps.isEmpty() && rateApps.isEmpty() && testApps.isEmpty() && updateApps.isEmpty() && notes.isEmpty()) {
                     item {
                         Text(
                             text = "No tasks for this date",
@@ -494,6 +507,28 @@ private fun UpdateTaskItem(task: DailyTask, onUpdateClick: () -> Unit) {
             Button(onClick = onUpdateClick) {
                 Text("Update")
             }
+        }
+    }
+}
+@Composable
+private fun NoteTaskItem(task: DailyTask) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Text(
+                text = task.appName, // Content is stored in appName
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }

@@ -26,22 +26,30 @@ export default function NewTaskPage() {
 
         // Validation
         if (!form.appName) {
-            alert('App Name is required');
-            return;
-        }
-        if (!form.playStoreUrl) {
-            alert('Play Store URL is required');
-            return;
-        }
-        if (form.taskType === 'TEST_APP' && !form.acceptUrl) {
-            alert('Accept URL is required for Test App');
+            alert('App Name/Content is required');
             return;
         }
 
-        const pkgName = extractPackageName(form.playStoreUrl);
-        if (!pkgName) {
-            alert('Could not extract Package Name from Play Store URL');
-            return;
+        // Validation for non-NOTES types
+        if (form.taskType !== 'NOTES') {
+            if (!form.playStoreUrl) {
+                alert('Play Store URL is required');
+                return;
+            }
+            if (form.taskType === 'TEST_APP' && !form.acceptUrl) {
+                alert('Accept URL is required for Test App');
+                return;
+            }
+        }
+
+        let pkgName = '';
+        if (form.taskType !== 'NOTES') {
+            const extracted = extractPackageName(form.playStoreUrl);
+            if (!extracted) {
+                alert('Could not extract Package Name from Play Store URL');
+                return;
+            }
+            pkgName = extracted;
         }
 
         setLoading(true);
@@ -91,38 +99,51 @@ export default function NewTaskPage() {
                             <option value="RATE_APP">Rating App</option>
                             <option value="TEST_APP">Test App Baru</option>
                             <option value="UPDATE_APP">Update App</option>
+                            <option value="NOTES">Notes</option>
                         </select>
                     </div>
 
-                    {/* App Name */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">App Name</label>
-                        <input
-                            type="text"
-                            value={form.appName}
-                            onChange={(e) => setForm({ ...form, appName: e.target.value })}
-                            placeholder="e.g. My App"
-                            className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            required
-                        />
-                    </div>
-
-
-
-                    {/* Play Store URL */}
+                    {/* App Name / Note Content */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Play Store URL <span className="text-red-500">*</span>
+                            {form.taskType === 'NOTES' ? 'Note Content' : 'App Name'}
                         </label>
-                        <input
-                            type="url"
-                            value={form.playStoreUrl}
-                            onChange={(e) => setForm({ ...form, playStoreUrl: e.target.value })}
-                            placeholder="https://play.google.com/store/apps/details?id=..."
-                            className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            required
-                        />
+                        {form.taskType === 'NOTES' ? (
+                            <textarea
+                                value={form.appName}
+                                onChange={(e) => setForm({ ...form, appName: e.target.value })}
+                                placeholder="Enter note content..."
+                                className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white h-32"
+                                required
+                            />
+                        ) : (
+                            <input
+                                type="text"
+                                value={form.appName}
+                                onChange={(e) => setForm({ ...form, appName: e.target.value })}
+                                placeholder="e.g. My App"
+                                className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                required
+                            />
+                        )}
                     </div>
+
+                    {/* Play Store URL (Hidden for NOTES) */}
+                    {form.taskType !== 'NOTES' && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Play Store URL <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="url"
+                                value={form.playStoreUrl}
+                                onChange={(e) => setForm({ ...form, playStoreUrl: e.target.value })}
+                                placeholder="https://play.google.com/store/apps/details?id=..."
+                                className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                required
+                            />
+                        </div>
+                    )}
 
                     {/* Accept URL (only for TEST_APP) */}
                     {form.taskType === 'TEST_APP' && (
@@ -137,6 +158,8 @@ export default function NewTaskPage() {
                             />
                         </div>
                     )}
+
+
 
                     {/* Submit */}
                     <div className="flex gap-4 pt-4">

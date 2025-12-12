@@ -14,6 +14,7 @@ const TASK_TYPE_LABELS: Record<TaskType, string> = {
   RATE_APP: 'Rating App',
   TEST_APP: 'Test App Baru',
   UPDATE_APP: 'Update App',
+  NOTES: 'Notes',
 };
 
 const TASK_TYPE_COLORS: Record<TaskType, string> = {
@@ -21,6 +22,7 @@ const TASK_TYPE_COLORS: Record<TaskType, string> = {
   RATE_APP: 'bg-yellow-100 border-yellow-300',
   TEST_APP: 'bg-blue-100 border-blue-300',
   UPDATE_APP: 'bg-green-100 border-green-300',
+  NOTES: 'bg-purple-100 border-purple-300',
 };
 
 export default function Dashboard() {
@@ -161,7 +163,9 @@ function TaskSection({
             >
               <div>
                 <p className="font-medium">{task.appName}</p>
-                <p className="text-sm text-gray-500">{task.packageName}</p>
+                {task.taskType !== 'NOTES' && (
+                  <p className="text-sm text-gray-500">{task.packageName}</p>
+                )}
               </div>
               <div className="flex gap-2">
                 <Link

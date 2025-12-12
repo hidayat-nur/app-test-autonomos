@@ -7,7 +7,7 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 const db = getFirestore(app);
 
 // Types
-export type TaskType = 'DELETE_APP' | 'RATE_APP' | 'TEST_APP' | 'UPDATE_APP';
+export type TaskType = 'DELETE_APP' | 'RATE_APP' | 'TEST_APP' | 'UPDATE_APP' | 'NOTES';
 
 export interface DailyTask {
     id?: string;
@@ -101,5 +101,6 @@ export function groupTasksByType(tasks: DailyTask[]): Record<TaskType, DailyTask
         RATE_APP: tasks.filter(t => t.taskType === 'RATE_APP'),
         TEST_APP: tasks.filter(t => t.taskType === 'TEST_APP'),
         UPDATE_APP: tasks.filter(t => t.taskType === 'UPDATE_APP'),
+        NOTES: tasks.filter(t => t.taskType === 'NOTES'),
     };
 }

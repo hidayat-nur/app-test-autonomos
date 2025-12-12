@@ -6,8 +6,9 @@ package com.appautomation.data.model
 enum class TaskType {
     DELETE_APP,   // Hapus app baru
     RATE_APP,     // Rating app
-    TEST_APP,     // Test app baru
-    UPDATE_APP    // Update app
+    TEST_APP,
+    UPDATE_APP,
+    NOTES
 }
 
 /**
