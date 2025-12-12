@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createTask, type TaskType } from '@/lib/firestore';
+import { extractPackageName } from '@/lib/utils';
 
 function getTodayDate(): string {
     return new Date().toISOString().split('T')[0];
@@ -15,7 +16,6 @@ export default function NewTaskPage() {
     const [form, setForm] = useState({
         date: getTodayDate(),
         appName: '',
-        packageName: '',
         taskType: 'DELETE_APP' as TaskType,
         playStoreUrl: '',
         acceptUrl: '',
@@ -23,13 +23,33 @@ export default function NewTaskPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.appName || !form.packageName) {
-            alert('App Name and Package Name are required');
+
+        // Validation
+        if (!form.appName) {
+            alert('App Name is required');
             return;
         }
+        if (!form.playStoreUrl) {
+            alert('Play Store URL is required');
+            return;
+        }
+        if (form.taskType === 'TEST_APP' && !form.acceptUrl) {
+            alert('Accept URL is required for Test App');
+            return;
+        }
+
+        const pkgName = extractPackageName(form.playStoreUrl);
+        if (!pkgName) {
+            alert('Could not extract Package Name from Play Store URL');
+            return;
+        }
+
         setLoading(true);
         try {
-            await createTask(form);
+            await createTask({
+                ...form,
+                packageName: pkgName,
+            });
             router.push('/');
         } catch (err) {
             alert('Failed to create task');
@@ -67,7 +87,7 @@ export default function NewTaskPage() {
                             onChange={(e) => setForm({ ...form, taskType: e.target.value as TaskType })}
                             className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                         >
-                            <option value="DELETE_APP">Hapus App Baru</option>
+                            <option value="DELETE_APP">Hapus App</option>
                             <option value="RATE_APP">Rating App</option>
                             <option value="TEST_APP">Test App Baru</option>
                             <option value="UPDATE_APP">Update App</option>
@@ -87,23 +107,12 @@ export default function NewTaskPage() {
                         />
                     </div>
 
-                    {/* Package Name */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Package Name</label>
-                        <input
-                            type="text"
-                            value={form.packageName}
-                            onChange={(e) => setForm({ ...form, packageName: e.target.value })}
-                            placeholder="e.g. com.example.myapp"
-                            className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            required
-                        />
-                    </div>
+
 
                     {/* Play Store URL */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Play Store URL {form.taskType !== 'DELETE_APP' && <span className="text-red-500">*</span>}
+                            Play Store URL <span className="text-red-500">*</span>
                         </label>
                         <input
                             type="url"
@@ -111,6 +120,7 @@ export default function NewTaskPage() {
                             onChange={(e) => setForm({ ...form, playStoreUrl: e.target.value })}
                             placeholder="https://play.google.com/store/apps/details?id=..."
                             className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            required
                         />
                     </div>
 

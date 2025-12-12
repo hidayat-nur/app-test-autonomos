@@ -10,7 +10,7 @@ function getTodayDate(): string {
 }
 
 const TASK_TYPE_LABELS: Record<TaskType, string> = {
-  DELETE_APP: 'Hapus App Baru',
+  DELETE_APP: 'Hapus App',
   RATE_APP: 'Rating App',
   TEST_APP: 'Test App Baru',
   UPDATE_APP: 'Update App',
