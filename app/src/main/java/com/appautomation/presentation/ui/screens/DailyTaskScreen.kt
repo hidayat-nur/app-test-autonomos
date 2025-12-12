@@ -286,10 +286,18 @@ fun DailyTaskScreen(
                     }
                     items(rateApps) { task ->
                         RateTaskItem(task) {
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                data = Uri.parse(task.playStoreUrl)
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    data = Uri.parse("market://details?id=${task.packageName}")
+                                    setPackage("com.android.vending")
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    data = Uri.parse("https://play.google.com/store/apps/details?id=${task.packageName}")
+                                }
+                                context.startActivity(intent)
                             }
-                            context.startActivity(intent)
                         }
                     }
                     item { Spacer(modifier = Modifier.height(16.dp)) }
