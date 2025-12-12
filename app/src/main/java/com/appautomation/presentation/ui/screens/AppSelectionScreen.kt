@@ -26,12 +26,13 @@ import com.appautomation.data.model.AppSortOption
 import com.appautomation.presentation.viewmodel.AppSelectionViewModel
 import com.appautomation.service.AutomationForegroundService
 import com.appautomation.util.Constants
-
+import androidx.compose.material.icons.filled.List
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppSelectionScreen(
     viewModel: AppSelectionViewModel = hiltViewModel(),
-    onNavigateToMonitoring: () -> Unit
+    onNavigateToMonitoring: () -> Unit,
+    onNavigateToDailyTasks: () -> Unit
 ) {
     val context = LocalContext.current
     val installedApps by viewModel.installedApps.collectAsState()
@@ -91,6 +92,9 @@ fun AppSelectionScreen(
                 actions = {
                     IconButton(onClick = { showSettingsMenu = !showSettingsMenu }) {
                         Icon(Icons.Default.Settings, "Batch Settings")
+                    }
+                    IconButton(onClick = { onNavigateToDailyTasks() }) {
+                        Icon(Icons.Default.List, "Daily Tasks")
                     }
                     DropdownMenu(
                         expanded = showSettingsMenu,

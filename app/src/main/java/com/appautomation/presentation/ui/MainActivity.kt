@@ -27,7 +27,7 @@ import com.appautomation.presentation.viewmodel.SettingsViewModel
 import com.appautomation.service.AutomationForegroundService
 import com.appautomation.util.PermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
-
+import com.appautomation.presentation.ui.screens.DailyTaskScreen
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     
@@ -97,8 +97,15 @@ fun MainNavigation() {
             AppSelectionScreen(
                 onNavigateToMonitoring = {
                     navController.navigate("monitoring")
+                },
+                onNavigateToDailyTasks = {
+                    navController.navigate("daily_tasks")
                 }
             )
+        }
+        
+        composable("daily_tasks") {
+            DailyTaskScreen()
         }
         
         composable("monitoring") {

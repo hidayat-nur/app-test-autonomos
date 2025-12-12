@@ -1,8 +1,10 @@
 package com.appautomation.di
 
 import android.content.Context
+import com.appautomation.data.repository.DailyTaskRepository
 import com.appautomation.service.AppLauncher
 import com.appautomation.service.AppMonitor
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -24,5 +26,17 @@ object AppModule {
     @Singleton
     fun provideAppMonitor(@ApplicationContext context: Context): AppMonitor {
         return AppMonitor(context)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideFirebaseFirestore(): FirebaseFirestore {
+        return FirebaseFirestore.getInstance()
+    }
+    
+    @Provides
+    @Singleton
+    fun provideDailyTaskRepository(firestore: FirebaseFirestore): DailyTaskRepository {
+        return DailyTaskRepository(firestore)
     }
 }
