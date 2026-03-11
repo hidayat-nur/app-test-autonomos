@@ -8,11 +8,17 @@ function getTodayDate(): string {
     return new Date().toISOString().split('T')[0];
 }
 
+function formatDate(dateStr: string): string {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 export default function MasterDashboard() {
     const [apps, setApps] = useState<MasterApp[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<MasterAppStatus | 'ALL'>('ALL');
+    const [search, setSearch] = useState('');
 
     const loadApps = async () => {
         setLoading(true);
@@ -83,8 +89,18 @@ export default function MasterDashboard() {
         }
     };
 
+    const filteredApps = apps.filter(app => {
+        if (!search.trim()) return true;
+        const q = search.toLowerCase();
+        return (
+            (app.clientName || '').toLowerCase().includes(q) ||
+            (app.appName || '').toLowerCase().includes(q) ||
+            (app.packageName || '').toLowerCase().includes(q)
+        );
+    });
+
     return (
-        <div className="w-full px-4 py-8">
+        <div className="w-full px-[14px] py-8">
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Master Apps</h1>
@@ -98,6 +114,16 @@ export default function MasterDashboard() {
                         + Add Bulk Drafts
                     </Link>
                 </div>
+            </div>
+
+            <div className="mb-4">
+                <input
+                    type="text"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Cari client name, app name, atau package name..."
+                    className="w-full px-4 py-2 border rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
             </div>
 
             <div className="mb-6 flex space-x-2">
@@ -133,6 +159,7 @@ export default function MasterDashboard() {
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Client / App Info</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Platform & Earning</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tgl Published</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Jadwal Rating</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Jadwal Hapus</th>
                                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Manual Tasks</th>
@@ -140,14 +167,14 @@ export default function MasterDashboard() {
                             </tr>
                         </thead>
                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                            {apps.length === 0 ? (
+                            {filteredApps.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                                         No apps found for this filter.
                                     </td>
                                 </tr>
                             ) : (
-                                apps.map(app => (
+                                filteredApps.map(app => (
                                     <tr key={app.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="text-sm font-medium text-gray-900 dark:text-white">{app.clientName} {app.appName ? `(${app.appName})` : ''}</div>
@@ -168,6 +195,11 @@ export default function MasterDashboard() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="text-sm text-gray-600 dark:text-gray-300">
+                                                {app.createdAt ? formatDate(new Date(app.createdAt).toISOString().split('T')[0]) : '-'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
                                             {app.rateDate ? (
                                                 <div className={`px-3 py-1.5 rounded-md text-sm font-medium inline-block
                                                     ${app.rateDate < getTodayDate() ? 'bg-red-100 text-red-800 border border-red-200' :
@@ -175,7 +207,7 @@ export default function MasterDashboard() {
                                                             'text-gray-600 dark:text-gray-300'
                                                     }
                                                 `}>
-                                                    {app.rateDate}
+                                                    {formatDate(app.rateDate)}
                                                 </div>
                                             ) : (
                                                 <span className="text-gray-400 text-sm">-</span>
@@ -189,7 +221,7 @@ export default function MasterDashboard() {
                                                             'text-gray-600 dark:text-gray-300'
                                                     }
                                                 `}>
-                                                    {app.deleteDate}
+                                                    {formatDate(app.deleteDate)}
                                                 </div>
                                             ) : (
                                                 <span className="text-gray-400 text-sm">-</span>
