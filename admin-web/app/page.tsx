@@ -365,7 +365,20 @@ export default function MasterDashboard() {
                                     sortedApps.map(app => (
                                         <tr key={app.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900 dark:text-white">{app.clientName} {app.appName ? `(${app.appName})` : ''}</div>
+                                                <div className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-1 group">
+                                                    <span>{app.clientName}</span>
+                                                    {app.appName && <span className="text-gray-500 font-normal">({app.appName})</span>}
+                                                    <button
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(app.clientName || '');
+                                                            const btn = document.getElementById(`copy-${app.id}`);
+                                                            if (btn) { btn.textContent = '✓'; setTimeout(() => { btn.textContent = '📋'; }, 1200); }
+                                                        }}
+                                                        id={`copy-${app.id}`}
+                                                        title="Copy client name"
+                                                        className="opacity-30 group-hover:opacity-100 text-gray-400 hover:text-blue-500 transition text-base px-1"
+                                                    >📋</button>
+                                                </div>
                                                 <div className="text-xs text-gray-500">{app.packageName || 'No package'}</div>
                                                 <div className="text-xs text-gray-400 mt-1 max-w-[200px] truncate">{app.credentials || 'No credentials'}</div>
                                             </td>
