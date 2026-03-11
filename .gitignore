@@ -109,3 +109,7 @@ app/build/outputs/bundle/
 
 # All build directories
 **/build/
+
+# Baseline Profiles
+app/release/baselineProfiles/
+**/*.dm
