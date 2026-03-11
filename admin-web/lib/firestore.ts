@@ -23,7 +23,7 @@ export interface DailyTask {
 const COLLECTION_NAME = 'daily_tasks';
 const MASTER_APPS_COLLECTION = 'master_apps';
 
-export type MasterAppStatus = 'DRAFT' | 'PUBLISHED' | 'DELETED';
+export type MasterAppStatus = 'DRAFT' | 'PUBLISHED' | 'DELETED' | 'ARCHIVED';
 
 // Expanded MasterApp Schema V2
 export interface MasterApp {
@@ -132,12 +132,10 @@ export function groupTasksByType(tasks: DailyTask[]): Record<TaskType, DailyTask
 // --- Master Apps CRUD ---
 
 export async function getMasterApps(status?: MasterAppStatus): Promise<MasterApp[]> {
-    let q;
-    if (status) {
-        q = query(collection(db, MASTER_APPS_COLLECTION), where('status', '==', status), orderBy('createdAt', 'desc'));
-    } else {
-        q = query(collection(db, MASTER_APPS_COLLECTION), orderBy('createdAt', 'desc'));
-    }
+    // Always fetch all by createdAt desc; filter client-side to avoid composite index issues
+    const q = status && status !== 'ARCHIVED'
+        ? query(collection(db, MASTER_APPS_COLLECTION), where('status', '==', status), orderBy('createdAt', 'desc'))
+        : query(collection(db, MASTER_APPS_COLLECTION), orderBy('createdAt', 'desc'));
 
     const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Firestore request timeout (5s)')), 5000);
@@ -148,7 +146,19 @@ export async function getMasterApps(status?: MasterAppStatus): Promise<MasterApp
             getDocs(q),
             timeoutPromise
         ]);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MasterApp));
+        const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MasterApp));
+        if (status === 'ARCHIVED') {
+            // Show only archived
+            return all.filter(a => a.status === 'ARCHIVED');
+        }
+        if (status) {
+            // DRAFT / PUBLISHED — already filtered by Firestore query
+            return all;
+        }
+        // No status = ALL view: exclude DELETED, but ARCHIVED still shows (earnings counted)
+        // Exception: master list page passes undefined and filters ARCHIVED on its own via tab
+        // Earnings page also passes undefined — we exclude only DELETED here
+        return all.filter(a => a.status !== 'DELETED');
     } catch (error) {
         console.error('Firestore getMasterApps error:', error);
         throw error;

@@ -34,7 +34,8 @@ export default function MasterDashboard() {
         setError(null);
         try {
             const data = await getMasterApps(filter === 'ALL' ? undefined : filter);
-            setApps(data);
+            // Hide ARCHIVED from the ALL tab — they have their own dedicated tab
+            setApps(filter === 'ALL' ? data.filter(a => a.status !== 'ARCHIVED') : data);
         } catch (err) {
             console.error('Error loading Master Apps:', err);
             setError(err instanceof Error ? err.message : 'Failed to load Master Apps');
@@ -96,6 +97,21 @@ export default function MasterDashboard() {
             console.error(e);
             alert('Failed to destroy master record');
         }
+    };
+
+    const handleArchive = async (app: MasterApp) => {
+        if (!window.confirm(`Archive "${app.clientName}"? App akan disembunyikan dari tab ALL/DRAFT/PUBLISHED.`)) return;
+        try {
+            await updateMasterApp(app.id!, { status: 'ARCHIVED' });
+            loadApps();
+        } catch (e) { console.error(e); alert('Gagal archive.'); }
+    };
+
+    const handleUnarchive = async (app: MasterApp) => {
+        try {
+            await updateMasterApp(app.id!, { status: 'DRAFT' });
+            loadApps();
+        } catch (e) { console.error(e); alert('Gagal unarchive.'); }
     };
 
     const openPublishModal = (app: MasterApp) => {
@@ -186,7 +202,7 @@ export default function MasterDashboard() {
                 </div>
 
                 <div className="mb-6 flex space-x-2">
-                    {(['ALL', 'DRAFT', 'PUBLISHED'] as const).map(status => (
+                    {(['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'] as const).map(status => (
                         <button
                             key={status}
                             onClick={() => setFilter(status)}
@@ -249,7 +265,8 @@ export default function MasterDashboard() {
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                         ${app.status === 'PUBLISHED' ? 'bg-green-100 text-green-800' :
                                                         app.status === 'DELETED' ? 'bg-gray-100 text-gray-800' :
-                                                            'bg-yellow-100 text-yellow-800'}`}>
+                                                            app.status === 'ARCHIVED' ? 'bg-purple-100 text-purple-800' :
+                                                                'bg-yellow-100 text-yellow-800'}`}>
                                                     {app.status}
                                                 </span>
                                             </td>
@@ -314,10 +331,26 @@ export default function MasterDashboard() {
                                                     +Uninstall
                                                 </button>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right font-medium">
+                                            <td className="px-6 py-4 whitespace-nowrap text-right font-medium space-y-1">
+                                                {app.status !== 'ARCHIVED' && (
+                                                    <button
+                                                        onClick={() => handleArchive(app)}
+                                                        className="block w-full bg-orange-50 text-orange-600 px-3 py-1 rounded text-xs hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 transition"
+                                                    >
+                                                        📦 Archive
+                                                    </button>
+                                                )}
+                                                {app.status === 'ARCHIVED' && (
+                                                    <button
+                                                        onClick={() => handleUnarchive(app)}
+                                                        className="block w-full bg-blue-50 text-blue-600 px-3 py-1 rounded text-xs hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 transition"
+                                                    >
+                                                        ↩ Unarchive
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => handleDestroyMaster(app)}
-                                                    className="bg-red-50 text-red-600 px-3 py-1 rounded text-xs hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 transition"
+                                                    className="block w-full bg-red-50 text-red-600 px-3 py-1 rounded text-xs hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 transition"
                                                 >
                                                     Wipe Master
                                                 </button>
