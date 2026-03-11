@@ -79,14 +79,16 @@ class AppMonitor @Inject constructor(
                 return false
             }
             
-            val mode = appOps.unsafeCheckOpNoThrow(
+            // Use checkOpNoThrow for maximum compatibility (available since API 19)
+            @Suppress("DEPRECATION")
+            val mode = appOps.checkOpNoThrow(
                 AppOpsManager.OPSTR_GET_USAGE_STATS,
                 Process.myUid(),
                 context.packageName
             )
             mode == AppOpsManager.MODE_ALLOWED
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking usage stats permission", e)
+            Log.e(TAG, "Error checking usage stats permission on ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}", e)
             false
         }
     }

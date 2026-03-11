@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -24,7 +27,7 @@ import com.appautomation.presentation.viewmodel.SettingsViewModel
 import com.appautomation.service.AutomationForegroundService
 import com.appautomation.util.PermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
-
+import com.appautomation.presentation.ui.screens.DailyTaskScreen
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     
@@ -52,11 +55,27 @@ fun MainNavigation() {
     
     // Check if all permissions are granted
     val allPermissionsGranted = permissionsState.accessibilityEnabled && 
-                                permissionsState.usageStatsGranted
+                                permissionsState.usageStatsGranted &&
+                                permissionsState.overlayPermissionGranted
     
-    // Refresh permissions state when resuming
-    LaunchedEffect(Unit) {
-        settingsViewModel.checkPermissions()
+    android.util.Log.d("MainActivity", "🚦 Navigation check:")
+    android.util.Log.d("MainActivity", "  All granted: $allPermissionsGranted")
+    android.util.Log.d("MainActivity", "  Accessibility: ${permissionsState.accessibilityEnabled}")
+    android.util.Log.d("MainActivity", "  Usage Stats: ${permissionsState.usageStatsGranted}")
+    android.util.Log.d("MainActivity", "  Overlay: ${permissionsState.overlayPermissionGranted}")
+    
+    // Refresh permissions when activity resumes
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                settingsViewModel.checkPermissions()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
     
     NavHost(
@@ -78,6 +97,17 @@ fun MainNavigation() {
             AppSelectionScreen(
                 onNavigateToMonitoring = {
                     navController.navigate("monitoring")
+                },
+                onNavigateToDailyTasks = {
+                    navController.navigate("daily_tasks")
+                }
+            )
+        }
+        
+        composable("daily_tasks") {
+            DailyTaskScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }

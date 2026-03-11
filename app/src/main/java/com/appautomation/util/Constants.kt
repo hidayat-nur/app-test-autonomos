@@ -2,8 +2,11 @@ package com.appautomation.util
 
 object Constants {
     // Default duration
-    const val DEFAULT_DURATION_MINUTES = 7
+    const val DEFAULT_DURATION_MINUTES = 1
     const val DEFAULT_DURATION_MILLIS = DEFAULT_DURATION_MINUTES * 60 * 1000L
+    // Test mode: when true, use a short duration for quick testing
+    const val TEST_MODE = false
+    const val TEST_DURATION_MILLIS = 12_000L
     
     // Duration limits
     const val MIN_DURATION_MINUTES = 1

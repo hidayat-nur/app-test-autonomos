@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appautomation.data.model.AppInfo
+import com.appautomation.data.model.AppSortOption
 import com.appautomation.data.model.AppTask
 import com.appautomation.service.AppLauncher
 import com.appautomation.service.AutomationManager
@@ -53,6 +54,9 @@ class AppSelectionViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     
+    private val _sortOption = MutableStateFlow(AppSortOption.INSTALL_OLDEST)
+    val sortOption: StateFlow<AppSortOption> = _sortOption.asStateFlow()
+    
     private val _testedAppsToday = MutableStateFlow<Set<String>>(emptySet())
     val testedAppsToday: StateFlow<Set<String>> = _testedAppsToday.asStateFlow()
     
@@ -91,11 +95,13 @@ class AppSelectionViewModel @Inject constructor(
             val tested = prefs.getStringSet(Constants.PREF_TESTED_APPS_TODAY, emptySet()) ?: emptySet()
             _testedAppsToday.value = tested
         } else {
-            // New day - clear tested apps
+            // New day - clear tested apps and reset batch index so user starts fresh each day
             _testedAppsToday.value = emptySet()
+            _currentBatchIndex.value = 0
             prefs.edit().apply {
                 putStringSet(Constants.PREF_TESTED_APPS_TODAY, emptySet())
                 putString(Constants.PREF_LAST_TEST_DATE, today)
+                putInt(Constants.PREF_CURRENT_BATCH_INDEX, 0)
                 apply()
             }
         }
@@ -114,14 +120,32 @@ class AppSelectionViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             val apps = appLauncher.getInstalledApps(includeSystemApps)
-            _installedApps.value = apps
+            _installedApps.value = sortApps(apps, _sortOption.value)
             _isLoading.value = false
+        }
+    }
+    
+    fun setSortOption(option: AppSortOption) {
+        _sortOption.value = option
+        // Re-sort current list
+        _installedApps.value = sortApps(_installedApps.value, option)
+        
+        // Save preference
+        prefs.edit().putString("sort_option", option.name).apply()
+    }
+    
+    private fun sortApps(apps: List<AppInfo>, option: AppSortOption): List<AppInfo> {
+        return when (option) {
+            AppSortOption.NAME_ASC -> apps.sortedBy { it.appName.lowercase() }
+            AppSortOption.NAME_DESC -> apps.sortedByDescending { it.appName.lowercase() }
+            AppSortOption.INSTALL_NEWEST -> apps.sortedByDescending { it.installTime }
+            AppSortOption.INSTALL_OLDEST -> apps.sortedBy { it.installTime }
         }
     }
     
     private fun loadSavedSelections() {
         val savedApps = prefs.getStringSet(PREF_SELECTED_APPS, emptySet()) ?: emptySet()
-        val globalDuration = _globalDurationMinutes.value * 60 * 1000L
+        val globalDuration = if (Constants.TEST_MODE) Constants.TEST_DURATION_MILLIS else _globalDurationMinutes.value * 60 * 1000L
         
         val restoredSelections = savedApps.mapNotNull { entry ->
             val parts = entry.split("|")
@@ -154,10 +178,11 @@ class AppSelectionViewModel @Inject constructor(
     fun toggleAppSelection(app: AppInfo, isSelected: Boolean) {
         val currentMap = _selectedApps.value.toMutableMap()
         if (isSelected) {
+            val duration = if (Constants.TEST_MODE) Constants.TEST_DURATION_MILLIS else _globalDurationMinutes.value * 60 * 1000L
             currentMap[app.packageName] = AppTask(
                 packageName = app.packageName,
                 appName = app.appName,
-                durationMillis = _globalDurationMinutes.value * 60 * 1000L
+                durationMillis = duration
             )
         } else {
             currentMap.remove(app.packageName)
@@ -172,7 +197,8 @@ class AppSelectionViewModel @Inject constructor(
         
         // Update all selected apps with new global duration
         val updatedMap = _selectedApps.value.mapValues { (_, task) ->
-            task.copy(durationMillis = durationMinutes * 60 * 1000L)
+            val newDuration = if (Constants.TEST_MODE) Constants.TEST_DURATION_MILLIS else durationMinutes * 60 * 1000L
+            task.copy(durationMillis = newDuration)
         }
         _selectedApps.value = updatedMap
     }
@@ -183,7 +209,7 @@ class AppSelectionViewModel @Inject constructor(
     }
     
     fun selectAll() {
-        val globalDuration = _globalDurationMinutes.value * 60 * 1000L
+        val globalDuration = if (Constants.TEST_MODE) Constants.TEST_DURATION_MILLIS else _globalDurationMinutes.value * 60 * 1000L
         val allSelected = _installedApps.value.associate { app ->
             app.packageName to AppTask(
                 packageName = app.packageName,
@@ -288,5 +314,87 @@ class AppSelectionViewModel @Inject constructor(
     
     fun isAppTestedToday(packageName: String): Boolean {
         return _testedAppsToday.value.contains(packageName)
+    }
+
+    /**
+     * Request uninstall for all currently selected apps.
+     * Each app will trigger the system uninstall dialog one by one.
+     * Returns the list of package names that were requested for uninstall.
+     */
+    fun getSelectedPackagesForUninstall(): List<String> {
+        return _selectedApps.value.keys.toList()
+    }
+
+    /**
+     * Request uninstall for a single app and remove it from selection.
+     */
+    fun requestUninstallApp(packageName: String): Boolean {
+        val result = appLauncher.requestUninstallApp(packageName)
+        if (result) {
+            // Remove from selection
+            val currentMap = _selectedApps.value.toMutableMap()
+            currentMap.remove(packageName)
+            _selectedApps.value = currentMap
+            saveSelections()
+        }
+        return result
+    }
+
+    /**
+     * Request uninstall for the first selected app (for sequential uninstall flow).
+     * Returns the package name if successful, null otherwise.
+     */
+    fun requestUninstallFirstSelected(): String? {
+        val firstPackage = _selectedApps.value.keys.firstOrNull() ?: return null
+        return if (requestUninstallApp(firstPackage)) firstPackage else null
+    }
+    
+    /**
+     * Uninstall all selected apps one by one.
+     * Each app will trigger the system uninstall dialog.
+     */
+    fun uninstallAllSelected() {
+        viewModelScope.launch(Dispatchers.Main) {
+            val packagesToUninstall = _selectedApps.value.keys.toList()
+            for (packageName in packagesToUninstall) {
+                requestUninstallApp(packageName)
+                // Small delay between uninstalls to allow system dialog to appear
+                kotlinx.coroutines.delay(500)
+            }
+        }
+    }
+    
+    /**
+     * Refresh the installed apps list and remove uninstalled apps from selection.
+     * This is called after uninstall to update the UI.
+     */
+    fun refreshInstalledApps() {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Reload all installed apps
+            val apps = appLauncher.getInstalledApps(false)
+            _installedApps.value = apps
+            
+            // Remove uninstalled apps from selection
+            val installedPackages = apps.map { it.packageName }.toSet()
+            val currentSelection = _selectedApps.value.toMutableMap()
+            
+            // Remove apps that are no longer installed
+            val uninstalledPackages = currentSelection.keys.filter { !installedPackages.contains(it) }
+            uninstalledPackages.forEach { pkg ->
+                currentSelection.remove(pkg)
+            }
+            
+            if (uninstalledPackages.isNotEmpty()) {
+                _selectedApps.value = currentSelection
+                saveSelections()
+            }
+        }
+    }
+    
+    /**
+     * Open app page in Google Play Store
+     */
+    fun openAppInPlayStore(packageName: String) {
+        appLauncher.openInPlayStore(packageName)
     }
 }

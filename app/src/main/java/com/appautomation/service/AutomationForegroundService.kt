@@ -8,6 +8,7 @@ import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.appautomation.R
 import com.appautomation.presentation.ui.MainActivity
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
@@ -33,11 +34,45 @@ class AutomationForegroundService : Service() {
     
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification("Initializing...", 0))
+        
+        try {
+            // Log to Crashlytics
+            FirebaseCrashlytics.getInstance().log("ForegroundService onCreate - Device: ${Build.MANUFACTURER} ${Build.MODEL}")
+            
+            createNotificationChannel()
+            startForeground(NOTIFICATION_ID, createNotification("Initializing...", 0))
+            android.util.Log.d(TAG, "✅ Foreground service started")
+            
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "❌ Failed to start foreground - Device: ${Build.MANUFACTURER} ${Build.MODEL}", e)
+            // Report to Crashlytics
+            FirebaseCrashlytics.getInstance().apply {
+                setCustomKey("error_location", "ForegroundService.onCreate")
+                setCustomKey("device_manufacturer", Build.MANUFACTURER)
+                setCustomKey("device_model", Build.MODEL)
+                recordException(e)
+            }
+            throw e
+        }
         
         // Acquire wake lock to prevent device from sleeping
         acquireWakeLock()
+        
+        // Start floating timer bubble (optional - don't crash if fails)
+        if (android.provider.Settings.canDrawOverlays(this)) {
+            val floatingIntent = Intent(this, FloatingTimerService::class.java).apply {
+                action = FloatingTimerService.ACTION_SHOW
+            }
+            try {
+                startService(floatingIntent)
+                android.util.Log.d(TAG, "✅ FloatingTimerService started")
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "⚠️ FloatingTimerService failed (non-critical)", e)
+                FirebaseCrashlytics.getInstance().log("FloatingTimer failed on ${Build.MANUFACTURER} - non-critical")
+            }
+        } else {
+            android.util.Log.d(TAG, "⚠️ Overlay permission not granted - skipping floating timer")
+        }
         
         // Observe automation state and update notification
         serviceScope.launch {
@@ -56,7 +91,20 @@ class AutomationForegroundService : Service() {
                         notificationManager.notify(NOTIFICATION_ID, notification)
                     }
                     is AutomationManager.AutomationState.Completed -> {
-                        // Service will be stopped by user or automatically
+                        // No completion notification (permission may be missing).
+                        // Still bring our app to foreground so user sees the Completed UI.
+                        try {
+                            delay(500)
+                            val intent = Intent(this@AutomationForegroundService, MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            }
+                            startActivity(intent)
+                            android.util.Log.d(TAG, "Launched MainActivity after completion")
+                        } catch (e: Exception) {
+                            android.util.Log.e(TAG, "Failed to launch MainActivity on completion", e)
+                        }
+
+                        // Keep service alive briefly to ensure activity is shown, then stop
                         delay(2000)
                         stopSelf()
                     }
@@ -111,6 +159,13 @@ class AutomationForegroundService : Service() {
     
     override fun onDestroy() {
         super.onDestroy()
+        
+        // Hide floating timer bubble
+        val floatingIntent = Intent(this, FloatingTimerService::class.java).apply {
+            action = FloatingTimerService.ACTION_HIDE
+        }
+        startService(floatingIntent)
+        
         releaseWakeLock()
         serviceScope.cancel()
     }

@@ -26,7 +26,8 @@ class SettingsViewModel @Inject constructor(
         val accessibilityEnabled: Boolean = false,
         val usageStatsGranted: Boolean = false,
         val batteryOptimizationDisabled: Boolean = false,
-        val notificationPermissionGranted: Boolean = false
+        val notificationPermissionGranted: Boolean = false,
+        val overlayPermissionGranted: Boolean = false
     )
     
     init {
@@ -34,11 +35,18 @@ class SettingsViewModel @Inject constructor(
     }
     
     fun checkPermissions() {
+        val overlayGranted = android.provider.Settings.canDrawOverlays(context)
+        android.util.Log.d("SettingsViewModel", "🔍 Checking permissions...")
+        android.util.Log.d("SettingsViewModel", "  Accessibility: ${PermissionHelper.isAccessibilityServiceEnabled(context)}")
+        android.util.Log.d("SettingsViewModel", "  Usage Stats: ${PermissionHelper.hasUsageStatsPermission(context)}")
+        android.util.Log.d("SettingsViewModel", "  Overlay: $overlayGranted")
+        
         _permissionsState.value = PermissionsState(
             accessibilityEnabled = PermissionHelper.isAccessibilityServiceEnabled(context),
             usageStatsGranted = PermissionHelper.hasUsageStatsPermission(context),
             batteryOptimizationDisabled = PermissionHelper.isBatteryOptimizationDisabled(context),
-            notificationPermissionGranted = PermissionHelper.hasNotificationPermission(context)
+            notificationPermissionGranted = PermissionHelper.hasNotificationPermission(context),
+            overlayPermissionGranted = overlayGranted
         )
     }
     
@@ -56,6 +64,15 @@ class SettingsViewModel @Inject constructor(
     
     fun openNotificationSettings() {
         PermissionHelper.openNotificationSettings(context)
+    }
+    
+    fun openOverlaySettings() {
+        val intent = android.content.Intent(
+            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            android.net.Uri.parse("package:${context.packageName}")
+        )
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
     }
     
     fun cleanOldLogs() {

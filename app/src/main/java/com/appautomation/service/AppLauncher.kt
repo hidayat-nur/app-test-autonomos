@@ -64,6 +64,14 @@ class AppLauncher @Inject constructor(
                         val appInfo = packageManager.getApplicationInfo(packageName, 0)
                         val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
                         
+                        // Get install time
+                        val packageInfo = try {
+                            packageManager.getPackageInfo(packageName, 0)
+                        } catch (e: Exception) {
+                            null
+                        }
+                        val installTime = packageInfo?.firstInstallTime ?: 0L
+                        
                         if (!includeSystemApps && isSystemApp) {
                             return@mapNotNull null
                         }
@@ -72,7 +80,8 @@ class AppLauncher @Inject constructor(
                             packageName = packageName,
                             appName = resolveInfo.loadLabel(packageManager).toString(),
                             icon = resolveInfo.loadIcon(packageManager),
-                            isSystemApp = isSystemApp
+                            isSystemApp = isSystemApp,
+                            installTime = installTime
                         )
                     } catch (e: Exception) {
                         Log.e(TAG, "Error loading app info", e)
@@ -111,6 +120,55 @@ class AppLauncher @Inject constructor(
             context.startActivity(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to go home", e)
+        }
+    }
+
+    /**
+     * Request to uninstall an app by package name.
+     * This will show the system uninstall dialog to the user.
+     */
+    fun requestUninstallApp(packageName: String): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_DELETE).apply {
+                data = android.net.Uri.parse("package:$packageName")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+            Log.d(TAG, "Requested uninstall for: $packageName")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to request uninstall for $packageName", e)
+            false
+        }
+    }
+    
+    /**
+     * Open app page in Google Play Store
+     */
+    fun openInPlayStore(packageName: String): Boolean {
+        return try {
+            // Try to open in Play Store app first
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                data = android.net.Uri.parse("market://details?id=$packageName")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+            Log.d(TAG, "Opened Play Store for: $packageName")
+            true
+        } catch (e: Exception) {
+            // If Play Store app not available, open in browser
+            try {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    data = android.net.Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+                Log.d(TAG, "Opened Play Store in browser for: $packageName")
+                true
+            } catch (e2: Exception) {
+                Log.e(TAG, "Failed to open Play Store for $packageName", e2)
+                false
+            }
         }
     }
 }

@@ -1,11 +1,7 @@
 package com.appautomation.presentation.ui.screens
 
-import android.Manifest
 import android.content.Intent
 import android.graphics.Bitmap
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,21 +15,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.appautomation.data.model.AppInfo
+import com.appautomation.data.model.AppSortOption
 import com.appautomation.presentation.viewmodel.AppSelectionViewModel
 import com.appautomation.service.AutomationForegroundService
 import com.appautomation.util.Constants
-
+import androidx.compose.material.icons.filled.List
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppSelectionScreen(
     viewModel: AppSelectionViewModel = hiltViewModel(),
-    onNavigateToMonitoring: () -> Unit
+    onNavigateToMonitoring: () -> Unit,
+    onNavigateToDailyTasks: () -> Unit
 ) {
     val context = LocalContext.current
     val installedApps by viewModel.installedApps.collectAsState()
@@ -44,33 +43,21 @@ fun AppSelectionScreen(
     val batchSize by viewModel.batchSize.collectAsState()
     val currentBatchIndex by viewModel.currentBatchIndex.collectAsState()
     val testedAppsToday by viewModel.testedAppsToday.collectAsState()
+    val sortOption by viewModel.sortOption.collectAsState()
     
     var showGlobalDurationDialog by remember { mutableStateOf(false) }
     var showBatchSizeDialog by remember { mutableStateOf(false) }
     var showBatchList by remember { mutableStateOf(false) }
+    var showSettingsMenu by remember { mutableStateOf(false) }
+    var showUninstallConfirmDialog by remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
+    var refreshTrigger by remember { mutableStateOf(0) }
     
-    // Permission launcher for Android 13+ notifications
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            // Permission granted, start automation
-            if (viewModel.startAutomation()) {
-                // Move to next batch for next time
-                viewModel.moveToNextBatch()
-                val intent = Intent(context, AutomationForegroundService::class.java)
-                context.startForegroundService(intent)
-                onNavigateToMonitoring()
-            }
-        } else {
-            // Permission denied - still start but warn user
-            if (viewModel.startAutomation()) {
-                // Move to next batch for next time
-                viewModel.moveToNextBatch()
-                val intent = Intent(context, AutomationForegroundService::class.java)
-                context.startForegroundService(intent)
-                onNavigateToMonitoring()
-            }
+    // Refresh apps list periodically when screen is active
+    LaunchedEffect(refreshTrigger) {
+        if (refreshTrigger > 0) {
+            kotlinx.coroutines.delay(2000) // Wait for uninstall to complete
+            viewModel.refreshInstalledApps()
         }
     }
     
@@ -103,15 +90,48 @@ fun AppSelectionScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showBatchSizeDialog = true }) {
+                    IconButton(onClick = { showSettingsMenu = !showSettingsMenu }) {
                         Icon(Icons.Default.Settings, "Batch Settings")
                     }
+                    IconButton(onClick = { onNavigateToDailyTasks() }) {
+                        Icon(Icons.Default.List, "Daily Tasks")
+                    }
+                    DropdownMenu(
+                        expanded = showSettingsMenu,
+                        onDismissRequest = { showSettingsMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Batch size") },
+                            onClick = {
+                                showBatchSizeDialog = true
+                                showSettingsMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Duration") },
+                            onClick = {
+                                showGlobalDurationDialog = true
+                                showSettingsMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("🔄 Refresh apps") },
+                            onClick = {
+                                viewModel.refreshInstalledApps()
+                                showSettingsMenu = false
+                            }
+                        )
+                    }
                     if (selectedApps.isNotEmpty()) {
+                        // Uninstall button
+                        IconButton(onClick = { showUninstallConfirmDialog = true }) {
+                            Icon(Icons.Default.Delete, "Uninstall selected apps")
+                        }
                         TextButton(onClick = { 
                             viewModel.clearAll()
                             viewModel.resetBatchIndex()
                         }) {
-                            Text("Clear All")
+                            Text("Clear")
                         }
                     }
                     IconButton(onClick = { viewModel.selectAll() }) {
@@ -129,22 +149,7 @@ fun AppSelectionScreen(
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
-                        // Global duration setting
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Duration for all apps:",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            TextButton(onClick = { showGlobalDurationDialog = true }) {
-                                Text("$globalDuration min")
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(Icons.Default.Edit, "Edit duration", modifier = Modifier.size(16.dp))
-                            }
-                        }
+                        // Duration setting moved to top-right Settings menu
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         
@@ -207,48 +212,60 @@ fun AppSelectionScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Text(
-                                                        "Batch $batchNum",
-                                                        fontWeight = if (isCurrentBatch) FontWeight.Bold else FontWeight.Normal,
-                                                        color = if (isCurrentBatch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                    if (isTested) {
-                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Text(
+                                                                "Batch $batchNum",
+                                                                fontWeight = if (isCurrentBatch) FontWeight.Bold else FontWeight.Normal,
+                                                                color = if (isCurrentBatch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                            )
+                                                            if (isTested) {
+                                                                Spacer(modifier = Modifier.width(8.dp))
+                                                                Surface(
+                                                                    shape = MaterialTheme.shapes.small,
+                                                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                                                    tonalElevation = 2.dp,
+                                                                    modifier = Modifier.padding(start = 4.dp)
+                                                                ) {
+                                                                    Text(
+                                                                        "Completed",
+                                                                        fontSize = 11.sp,
+                                                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // More human-friendly batch range and pluralization
+                                                        val rangeText = if (appsInBatch <= 1) {
+                                                            "App ${startIdx + 1}"
+                                                        } else {
+                                                            "Apps ${startIdx + 1}–$endIdx"
+                                                        }
+                                                        val appsLabel = if (appsInBatch == 1) "1 app" else "$appsInBatch apps"
+
                                                         Text(
-                                                            "✓",
-                                                            fontSize = 12.sp,
-                                                            color = MaterialTheme.colorScheme.tertiary
+                                                            appsLabel,
+                                                            fontSize = 11.sp,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                                         )
                                                     }
-                                                }
-                                                Text(
-                                                    "Apps ${startIdx + 1}-$endIdx ($appsInBatch apps)",
-                                                    fontSize = 11.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
                                             
                                             Button(
                                                 onClick = {
                                                     // Set batch index and start
                                                     viewModel.setBatchIndex(batchIndex)
-                                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                                    } else {
-                                                        if (viewModel.startAutomation()) {
-                                                            viewModel.moveToNextBatch()
-                                                            val intent = Intent(context, AutomationForegroundService::class.java)
-                                                            context.startForegroundService(intent)
-                                                            onNavigateToMonitoring()
-                                                        }
+                                                    if (viewModel.startAutomation()) {
+                                                        val intent = Intent(context, AutomationForegroundService::class.java)
+                                                        context.startForegroundService(intent)
+                                                        onNavigateToMonitoring()
                                                     }
                                                 },
                                                 modifier = Modifier.height(36.dp),
                                                 contentPadding = PaddingValues(horizontal = 12.dp)
                                             ) {
-                                                Text("Start", fontSize = 12.sp)
+                                                Text(if (isTested) "Test again" else "Test", fontSize = 12.sp)
                                             }
                                         }
                                         
@@ -264,39 +281,6 @@ fun AppSelectionScreen(
                         }
                         
                         Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text(
-                            "${selectedApps.size} apps selected",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        // Quick start button for current batch
-                        val currentBatch = currentBatchIndex + 1
-                        val buttonText = when {
-                            totalBatches == 0 -> "▶️ Start Testing"
-                            currentBatchIndex >= totalBatches -> "✅ All Batches Complete - Restart"
-                            currentBatchIndex == 0 -> "▶️ Start Batch 1"
-                            else -> "▶️ Continue Batch $currentBatch"
-                        }
-                        Button(
-                            onClick = {
-                                // Check and request notification permission for Android 13+
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                } else {
-                                    // For older versions, just start
-                                    if (viewModel.startAutomation()) {
-                                        val intent = Intent(context, AutomationForegroundService::class.java)
-                                        context.startForegroundService(intent)
-                                        onNavigateToMonitoring()
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(buttonText)
-                        }
                     }
                 }
             }
@@ -326,6 +310,81 @@ fun AppSelectionScreen(
                 singleLine = true
             )
             
+            // Sort options
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sort by: ${sortOption.displayName}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                IconButton(onClick = { showSortMenu = !showSortMenu }) {
+                    Icon(Icons.Default.MoreVert, "Sort options")
+                }
+                
+                DropdownMenu(
+                    expanded = showSortMenu,
+                    onDismissRequest = { showSortMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Name (A-Z)") },
+                        onClick = {
+                            viewModel.setSortOption(AppSortOption.NAME_ASC)
+                            showSortMenu = false
+                        },
+                        leadingIcon = {
+                            if (sortOption == AppSortOption.NAME_ASC) {
+                                Icon(Icons.Default.Check, "Selected")
+                            }
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Name (Z-A)") },
+                        onClick = {
+                            viewModel.setSortOption(AppSortOption.NAME_DESC)
+                            showSortMenu = false
+                        },
+                        leadingIcon = {
+                            if (sortOption == AppSortOption.NAME_DESC) {
+                                Icon(Icons.Default.Check, "Selected")
+                            }
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Newest installed") },
+                        onClick = {
+                            viewModel.setSortOption(AppSortOption.INSTALL_NEWEST)
+                            showSortMenu = false
+                        },
+                        leadingIcon = {
+                            if (sortOption == AppSortOption.INSTALL_NEWEST) {
+                                Icon(Icons.Default.Check, "Selected")
+                            }
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Oldest installed") },
+                        onClick = {
+                            viewModel.setSortOption(AppSortOption.INSTALL_OLDEST)
+                            showSortMenu = false
+                        },
+                        leadingIcon = {
+                            if (sortOption == AppSortOption.INSTALL_OLDEST) {
+                                Icon(Icons.Default.Check, "Selected")
+                            }
+                        }
+                    )
+                }
+            }
+            
+            Divider(modifier = Modifier.padding(horizontal = 16.dp))
+            
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -345,6 +404,9 @@ fun AppSelectionScreen(
                             isTestedToday = testedAppsToday.contains(app.packageName),
                             onSelectionChanged = { isSelected ->
                                 viewModel.toggleAppSelection(app, isSelected)
+                            },
+                            onOpenPlayStore = {
+                                viewModel.openAppInPlayStore(app.packageName)
                             }
                         )
                         Divider()
@@ -377,6 +439,83 @@ fun AppSelectionScreen(
             }
         )
     }
+
+    // Uninstall confirmation dialog
+    if (showUninstallConfirmDialog) {
+        val appsToUninstall = selectedApps.size
+        val appsList = selectedApps.values.toList()
+        
+        AlertDialog(
+            onDismissRequest = { showUninstallConfirmDialog = false },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+            title = { Text("Uninstall $appsToUninstall app${if (appsToUninstall > 1) "s" else ""}?") },
+            text = { 
+                Column {
+                    Text("Selected apps will be uninstalled one by one.")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Show list of apps to uninstall
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            "Apps to uninstall:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        appsList.take(5).forEach { app ->
+                            Text(
+                                "• ${app.appName}",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        if (appsList.size > 5) {
+                            Text(
+                                "... and ${appsList.size - 5} more",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontStyle = FontStyle.Italic
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "⚠️ Note: You can only uninstall apps that you installed. System apps and pre-installed apps cannot be uninstalled.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showUninstallConfirmDialog = false
+                        // Uninstall apps one by one
+                        viewModel.uninstallAllSelected()
+                        // Trigger refresh after uninstall
+                        refreshTrigger++
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(Icons.Default.Delete, "Delete", modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Uninstall")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUninstallConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -384,7 +523,8 @@ fun AppSelectionItem(
     app: AppInfo,
     isSelected: Boolean,
     isTestedToday: Boolean,
-    onSelectionChanged: (Boolean) -> Unit
+    onSelectionChanged: (Boolean) -> Unit,
+    onOpenPlayStore: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -456,6 +596,19 @@ fun AppSelectionItem(
                 app.packageName,
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        // Play Store icon button
+        IconButton(
+            onClick = { onOpenPlayStore() },
+            modifier = Modifier.size(40.dp)
+        ) {
+            Icon(
+                Icons.Default.ShoppingCart,
+                contentDescription = "Open in Play Store",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
             )
         }
     }

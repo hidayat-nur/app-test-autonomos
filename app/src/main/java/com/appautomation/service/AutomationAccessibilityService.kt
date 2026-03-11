@@ -399,11 +399,11 @@ class AutomationAccessibilityService : AccessibilityService() {
         
         when (gestureType) {
             0, 1, 2, 3 -> {
-                // 40% - Tap random area
-                val x = random.nextInt((screenWidth * 0.2f).toInt(), (screenWidth * 0.8f).toInt()).toFloat()
-                val y = random.nextInt((screenHeight * 0.2f).toInt(), (screenHeight * 0.8f).toInt()).toFloat()
-                performClick(x, y)
-                Log.d(TAG, "👆 Gesture #$gestureCount: TAP at (${x.toInt()}, ${y.toInt()})")
+                // 40% - Tap random area (avoid top-right corner where bubble is)
+                val safeX = random.nextInt((screenWidth * 0.2f).toInt(), (screenWidth * 0.7f).toInt()).toFloat()
+                val safeY = random.nextInt((screenHeight * 0.25f).toInt(), (screenHeight * 0.8f).toInt()).toFloat()
+                performClick(safeX, safeY)
+                Log.d(TAG, "👆 Gesture #$gestureCount: TAP at (${safeX.toInt()}, ${safeY.toInt()})")
             }
             4, 5, 6 -> {
                 // 30% - Scroll down

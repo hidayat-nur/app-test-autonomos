@@ -86,12 +86,12 @@ fun MonitoringScreen(
                 }
                 
                 is AutomationManager.AutomationState.Completed -> {
-                    // Move to next batch after completion
-                    viewModel.moveToNextBatch()
                     CompletedStateContent(
                         totalApps = currentState.totalApps,
                         onDismiss = {
-                            context.stopService(Intent(context, AutomationForegroundService::class.java))
+                            // Do not stop the foreground service automatically; keep the app
+                            // open so the user can start the next batch. Navigate back to
+                            // selection when user taps Done.
                             onNavigateBack()
                         }
                     )
