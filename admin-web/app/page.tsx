@@ -23,7 +23,7 @@ export default function MasterDashboard() {
     const [apps, setApps] = useState<MasterApp[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [filter, setFilter] = useState<MasterAppStatus | 'ALL'>('ALL');
+    const [filter, setFilter] = useState<MasterAppStatus | 'ALL' | 'RATE_TODAY' | 'DELETE_TODAY'>('ALL');
     const [search, setSearch] = useState('');
     const [publishModal, setPublishModal] = useState<MasterApp | null>(null);
     const [publishForm, setPublishForm] = useState({ appName: '', packageName: '', credentials: '', publishDate: getTodayDate() });
@@ -33,9 +33,17 @@ export default function MasterDashboard() {
         setLoading(true);
         setError(null);
         try {
-            const data = await getMasterApps(filter === 'ALL' ? undefined : filter);
-            // Hide ARCHIVED from the ALL tab — they have their own dedicated tab
-            setApps(filter === 'ALL' ? data.filter(a => a.status !== 'ARCHIVED') : data);
+            const today = getTodayDate();
+            if (filter === 'RATE_TODAY') {
+                const data = await getMasterApps();
+                setApps(data.filter(a => a.rateDate === today && a.status !== 'DELETED'));
+            } else if (filter === 'DELETE_TODAY') {
+                const data = await getMasterApps();
+                setApps(data.filter(a => a.deleteDate === today && a.status !== 'DELETED'));
+            } else {
+                const data = await getMasterApps(filter === 'ALL' ? undefined : filter as MasterAppStatus);
+                setApps(filter === 'ALL' ? data.filter(a => a.status !== 'ARCHIVED') : data);
+            }
         } catch (err) {
             console.error('Error loading Master Apps:', err);
             setError(err instanceof Error ? err.message : 'Failed to load Master Apps');
@@ -112,6 +120,38 @@ export default function MasterDashboard() {
             await updateMasterApp(app.id!, { status: 'DRAFT' });
             loadApps();
         } catch (e) { console.error(e); alert('Gagal unarchive.'); }
+    };
+
+    const [bulkPushing, setBulkPushing] = useState(false);
+
+    const handleBulkPush = async () => {
+        const today = getTodayDate();
+        const taskType = filter === 'RATE_TODAY' ? 'RATE_APP' : 'DELETE_APP';
+        const label = filter === 'RATE_TODAY' ? 'Rating' : 'Uninstall';
+        if (!window.confirm(`Dorong ${filteredApps.length} app ke task ${label} hari ini (${formatDate(today)})?`)) return;
+        setBulkPushing(true);
+        let done = 0;
+        try {
+            await Promise.all(
+                filteredApps.map(app =>
+                    createTask({
+                        date: today,
+                        appName: app.appName || app.clientName || 'Unknown',
+                        packageName: app.packageName || '',
+                        playStoreUrl: app.playStoreUrl || '',
+                        acceptUrl: app.acceptUrl || '',
+                        taskType,
+                    }).then(() => done++)
+                )
+            );
+            alert(`Berhasil! ${done} task ${label} dijadwalkan untuk ${formatDate(today)}.`);
+            loadApps();
+        } catch (e) {
+            console.error(e);
+            alert('Gagal push beberapa task.');
+        } finally {
+            setBulkPushing(false);
+        }
     };
 
     const openPublishModal = (app: MasterApp) => {
@@ -201,7 +241,7 @@ export default function MasterDashboard() {
                     />
                 </div>
 
-                <div className="mb-6 flex space-x-2">
+                <div className="mb-6 flex flex-wrap gap-2">
                     {(['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'] as const).map(status => (
                         <button
                             key={status}
@@ -214,6 +254,24 @@ export default function MasterDashboard() {
                             {status}
                         </button>
                     ))}
+                    <button
+                        onClick={() => setFilter('RATE_TODAY')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filter === 'RATE_TODAY'
+                            ? 'bg-yellow-500 text-white shadow'
+                            : 'bg-white dark:bg-gray-800 text-yellow-600 border border-yellow-300 hover:bg-yellow-50'
+                            }`}
+                    >
+                        ⭐ Rating Hari Ini
+                    </button>
+                    <button
+                        onClick={() => setFilter('DELETE_TODAY')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filter === 'DELETE_TODAY'
+                            ? 'bg-red-500 text-white shadow'
+                            : 'bg-white dark:bg-gray-800 text-red-600 border border-red-300 hover:bg-red-50'
+                            }`}
+                    >
+                        🗑️ Uninstall Hari Ini
+                    </button>
                 </div>
 
                 {loading && (
@@ -221,6 +279,25 @@ export default function MasterDashboard() {
                         {[1, 2, 3].map(i => (
                             <div key={i} className="h-16 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
                         ))}
+                    </div>
+                )}
+
+                {/* Bulk push banner for today tabs */}
+                {(filter === 'RATE_TODAY' || filter === 'DELETE_TODAY') && !loading && (
+                    <div className={`mb-4 flex items-center justify-between p-4 rounded-lg border ${filter === 'RATE_TODAY' ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'}`}>
+                        <div>
+                            <p className={`font-semibold text-sm ${filter === 'RATE_TODAY' ? 'text-yellow-800' : 'text-red-800'}`}>
+                                {filter === 'RATE_TODAY' ? '⭐ Rating Hari Ini' : '🗑️ Uninstall Hari Ini'} — {filteredApps.length} app terjadwal
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">{formatDate(getTodayDate())}</p>
+                        </div>
+                        <button
+                            onClick={handleBulkPush}
+                            disabled={bulkPushing || filteredApps.length === 0}
+                            className={`px-5 py-2 rounded-lg text-sm font-bold text-white transition disabled:opacity-50 ${filter === 'RATE_TODAY' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-500 hover:bg-red-600'}`}
+                        >
+                            {bulkPushing ? 'Mendorong...' : `Dorong ${filteredApps.length} App ke ${filter === 'RATE_TODAY' ? 'Rating' : 'Uninstall'} Semua →`}
+                        </button>
                     </div>
                 )}
 
