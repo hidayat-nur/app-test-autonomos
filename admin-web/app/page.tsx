@@ -81,9 +81,9 @@ export default function MasterDashboard() {
                 taskType: actionType
             });
 
-            // If it's the uninstall task on a published app, mark it as deleted on the master list
+            // If it's the uninstall task on a published app, mark it as archived on the master list
             if (actionType === 'DELETE_APP') {
-                await updateMasterApp(app.id!, { status: 'DELETED' });
+                await updateMasterApp(app.id!, { status: 'ARCHIVED' });
                 loadApps();
             }
             alert(`Task scheduled for ${dateStr}!`);
