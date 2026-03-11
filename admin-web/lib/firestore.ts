@@ -40,7 +40,8 @@ export interface MasterApp {
     rateDate?: string;
     deleteDate?: string;
     status: MasterAppStatus;
-    createdAt: number;
+    createdAt: number;    // Tgl Order — when the record was first input
+    publishedAt?: number; // Tgl Published — when the app actually went live
     updatedAt: number;
 }
 

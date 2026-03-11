@@ -182,6 +182,7 @@ export default function MasterDashboard() {
                 playStoreUrl,
                 acceptUrl,
                 credentials: publishForm.credentials || undefined,
+                publishedAt: new Date(publishDate).getTime(),
                 rateDate: addDays(publishDate, 12),
                 deleteDate: addDays(publishDate, 19),
                 status: 'PUBLISHED',
@@ -213,7 +214,7 @@ export default function MasterDashboard() {
         );
     });
 
-    type SortKey = 'clientName' | 'earning' | 'status' | 'createdAt' | 'rateDate' | 'deleteDate';
+    type SortKey = 'clientName' | 'earning' | 'status' | 'createdAt' | 'publishedAt' | 'rateDate' | 'deleteDate';
     const [sortKey, setSortKey] = useState<SortKey>('createdAt');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -229,6 +230,7 @@ export default function MasterDashboard() {
         else if (sortKey === 'earning') { av = a.earning || 0; bv = b.earning || 0; }
         else if (sortKey === 'status') { av = a.status || ''; bv = b.status || ''; }
         else if (sortKey === 'createdAt') { av = a.createdAt || 0; bv = b.createdAt || 0; }
+        else if (sortKey === 'publishedAt') { av = a.publishedAt || 0; bv = b.publishedAt || 0; }
         else if (sortKey === 'rateDate') { av = a.rateDate || ''; bv = b.rateDate || ''; }
         else if (sortKey === 'deleteDate') { av = a.deleteDate || ''; bv = b.deleteDate || ''; }
         if (av < bv) return sortDir === 'asc' ? -1 : 1;
@@ -347,7 +349,8 @@ export default function MasterDashboard() {
                                     <SortTh col="clientName" label="Client / App Info" />
                                     <SortTh col="earning" label="Platform & Earning" />
                                     <SortTh col="status" label="Status" />
-                                    <SortTh col="createdAt" label="Tgl Published" />
+                                    <SortTh col="createdAt" label="Tgl Order" />
+                                    <SortTh col="publishedAt" label="Tgl Published" />
                                     <SortTh col="rateDate" label="Jadwal Rating" />
                                     <SortTh col="deleteDate" label="Jadwal Hapus" />
                                     <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Manual Tasks</th>
@@ -357,7 +360,7 @@ export default function MasterDashboard() {
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 {filteredApps.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
                                             No apps found for this filter.
                                         </td>
                                     </tr>
@@ -399,6 +402,11 @@ export default function MasterDashboard() {
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className="text-sm text-gray-600 dark:text-gray-300">
                                                     {app.createdAt ? formatDate(new Date(app.createdAt).toISOString().split('T')[0]) : '-'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="text-sm text-gray-600 dark:text-gray-300">
+                                                    {app.publishedAt ? formatDate(new Date(app.publishedAt).toISOString().split('T')[0]) : <span className="text-gray-300">—</span>}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
