@@ -305,3 +305,34 @@ export async function migrateLegacyData(): Promise<{ migrated: number, skipped: 
     console.log(`Migration complete. Migrated: ${migratedCount}, Updated: ${updatedCount}, Skipped: ${skippedCount}`);
     return { migrated: migratedCount, skipped: skippedCount, updated: updatedCount };
 }
+
+// --- Operational Costs ---
+
+const OPERATIONAL_COSTS_COLLECTION = 'operational_costs';
+
+export interface OperationalCost {
+    id?: string;
+    name: string;
+    amount: number;
+    month: string; // YYYY-MM format
+    createdAt: number;
+}
+
+export async function getOperationalCosts(month: string): Promise<OperationalCost[]> {
+    const q = query(
+        collection(db, OPERATIONAL_COSTS_COLLECTION),
+        where('month', '==', month),
+        orderBy('createdAt', 'asc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OperationalCost));
+}
+
+export async function addOperationalCost(data: Omit<OperationalCost, 'id'>): Promise<string> {
+    const ref = await addDoc(collection(db, OPERATIONAL_COSTS_COLLECTION), data);
+    return ref.id;
+}
+
+export async function deleteOperationalCost(id: string): Promise<void> {
+    await deleteDoc(doc(db, OPERATIONAL_COSTS_COLLECTION, id));
+}
