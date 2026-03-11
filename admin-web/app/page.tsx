@@ -213,6 +213,42 @@ export default function MasterDashboard() {
         );
     });
 
+    type SortKey = 'clientName' | 'earning' | 'status' | 'createdAt' | 'rateDate' | 'deleteDate';
+    const [sortKey, setSortKey] = useState<SortKey>('createdAt');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+    const handleSort = (key: SortKey) => {
+        if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+        else { setSortKey(key); setSortDir('asc'); }
+    };
+
+    const sortedApps = [...filteredApps].sort((a, b) => {
+        let av: string | number = '';
+        let bv: string | number = '';
+        if (sortKey === 'clientName') { av = (a.appName || a.clientName || '').toLowerCase(); bv = (b.appName || b.clientName || '').toLowerCase(); }
+        else if (sortKey === 'earning') { av = a.earning || 0; bv = b.earning || 0; }
+        else if (sortKey === 'status') { av = a.status || ''; bv = b.status || ''; }
+        else if (sortKey === 'createdAt') { av = a.createdAt || 0; bv = b.createdAt || 0; }
+        else if (sortKey === 'rateDate') { av = a.rateDate || ''; bv = b.rateDate || ''; }
+        else if (sortKey === 'deleteDate') { av = a.deleteDate || ''; bv = b.deleteDate || ''; }
+        if (av < bv) return sortDir === 'asc' ? -1 : 1;
+        if (av > bv) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    const SortTh = ({ col, label, right }: { col: SortKey; label: string; right?: boolean }) => (
+        <th
+            scope="col"
+            onClick={() => handleSort(col)}
+            className={`px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-600 transition ${right ? 'text-right' : 'text-left'}`}
+        >
+            {label}{' '}
+            <span className="inline-block w-3">
+                {sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-25">↕</span>}
+            </span>
+        </th>
+    );
+
     return (
         <>
             <div className="w-full px-[14px] py-8">
@@ -308,12 +344,12 @@ export default function MasterDashboard() {
                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead className="bg-gray-50 dark:bg-gray-700/50">
                                 <tr>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Client / App Info</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Platform & Earning</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tgl Published</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Jadwal Rating</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Jadwal Hapus</th>
+                                    <SortTh col="clientName" label="Client / App Info" />
+                                    <SortTh col="earning" label="Platform & Earning" />
+                                    <SortTh col="status" label="Status" />
+                                    <SortTh col="createdAt" label="Tgl Published" />
+                                    <SortTh col="rateDate" label="Jadwal Rating" />
+                                    <SortTh col="deleteDate" label="Jadwal Hapus" />
                                     <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Manual Tasks</th>
                                     <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Master Actions</th>
                                 </tr>
@@ -326,7 +362,7 @@ export default function MasterDashboard() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredApps.map(app => (
+                                    sortedApps.map(app => (
                                         <tr key={app.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900 dark:text-white">{app.clientName} {app.appName ? `(${app.appName})` : ''}</div>
