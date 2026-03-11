@@ -181,7 +181,7 @@ export default function MasterDashboard() {
                 packageName,
                 playStoreUrl,
                 acceptUrl,
-                credentials: publishForm.credentials || undefined,
+                ...(publishForm.credentials ? { credentials: publishForm.credentials } : {}),
                 publishedAt: new Date(publishDate).getTime(),
                 rateDate: addDays(publishDate, 12),
                 deleteDate: addDays(publishDate, 19),
