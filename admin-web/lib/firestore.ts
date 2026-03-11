@@ -21,6 +21,29 @@ export interface DailyTask {
 }
 
 const COLLECTION_NAME = 'daily_tasks';
+const MASTER_APPS_COLLECTION = 'master_apps';
+
+export type MasterAppStatus = 'DRAFT' | 'PUBLISHED' | 'DELETED';
+
+// Expanded MasterApp Schema V2
+export interface MasterApp {
+    id?: string;
+    clientName: string;
+    platform: string;
+    deviceCount: number;
+    earning: number;
+    credentials?: string;
+    appName?: string;
+    packageName?: string;
+    playStoreUrl?: string;
+    acceptUrl?: string;
+    rateDate?: string;
+    deleteDate?: string;
+    status: MasterAppStatus;
+    createdAt: number;
+    updatedAt: number;
+}
+
 
 // Get all tasks for a specific date
 export async function getTasksByDate(date: string): Promise<DailyTask[]> {
@@ -103,4 +126,129 @@ export function groupTasksByType(tasks: DailyTask[]): Record<TaskType, DailyTask
         UPDATE_APP: tasks.filter(t => t.taskType === 'UPDATE_APP'),
         NOTES: tasks.filter(t => t.taskType === 'NOTES'),
     };
+}
+
+
+// --- Master Apps CRUD ---
+
+export async function getMasterApps(status?: MasterAppStatus): Promise<MasterApp[]> {
+    let q;
+    if (status) {
+        q = query(collection(db, MASTER_APPS_COLLECTION), where('status', '==', status), orderBy('updatedAt', 'desc'));
+    } else {
+        q = query(collection(db, MASTER_APPS_COLLECTION), orderBy('updatedAt', 'desc'));
+    }
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Firestore request timeout (5s)')), 5000);
+    });
+
+    try {
+        const snapshot = await Promise.race([
+            getDocs(q),
+            timeoutPromise
+        ]);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MasterApp));
+    } catch (error) {
+        console.error('Firestore getMasterApps error:', error);
+        throw error;
+    }
+}
+
+export async function createMasterApp(app: Omit<MasterApp, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    const now = Date.now();
+    const docRef = await addDoc(collection(db, MASTER_APPS_COLLECTION), {
+        ...app,
+        createdAt: now,
+        updatedAt: now,
+    });
+    return docRef.id;
+}
+
+export async function updateMasterApp(id: string, appData: Partial<MasterApp>): Promise<void> {
+    const docRef = doc(db, MASTER_APPS_COLLECTION, id);
+    await updateDoc(docRef, { ...appData, updatedAt: Date.now() });
+}
+
+export async function getMasterAppById(id: string): Promise<MasterApp | null> {
+    const docRef = doc(db, MASTER_APPS_COLLECTION, id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as MasterApp;
+    }
+    return null;
+}
+
+export async function deleteMasterAppAndTasks(id: string, packageName?: string): Promise<void> {
+    // 1. Delete Master Record
+    const docRef = doc(db, MASTER_APPS_COLLECTION, id);
+    await deleteDoc(docRef);
+
+    // 2. Cascade delete tasks by packageName if provided
+    if (packageName) {
+        const q = query(
+            collection(db, COLLECTION_NAME),
+            where('packageName', '==', packageName)
+        );
+        const snapshot = await getDocs(q);
+        const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+        console.log(`Cascade deleted ${deletePromises.length} tasks for package ${packageName}`);
+    }
+}
+
+// --- Data Migration ---
+export async function migrateLegacyData(): Promise<{ migrated: number, skipped: number }> {
+    const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+    const cutoffTime = Date.now() - NINETY_DAYS_MS;
+
+    console.log('Starting Migration. Fetching legacy tasks...');
+
+    // Fetch daily tasks created in the last 90 days. We assume date or createdAt could be used. 
+    // We'll just fetch all and filter client side for safety since we might not have a composite index.
+    const allTasks = await getAllTasks();
+    const recentTasks = allTasks.filter(t => t.createdAt >= cutoffTime && t.taskType !== 'NOTES');
+
+    console.log(`Found ${recentTasks.length} non-note tasks in the last 90 days.`);
+
+    // Deduplicate by package name
+    const uniquePackages = new Map<string, DailyTask>();
+    for (const task of recentTasks) {
+        if (task.packageName && !uniquePackages.has(task.packageName)) {
+            uniquePackages.set(task.packageName, task);
+        }
+    }
+
+    console.log(`Found ${uniquePackages.size} unique packages.`);
+
+    // Fetch existing Master Apps to avoid duplicates
+    const existingMasterApps = await getMasterApps();
+    const existingPackages = new Set(existingMasterApps.map(app => app.packageName).filter(Boolean));
+
+    let migratedCount = 0;
+    let skippedCount = 0;
+
+    for (const [packageName, task] of uniquePackages.entries()) {
+        if (existingPackages.has(packageName)) {
+            skippedCount++;
+            continue;
+        }
+
+        // Migrate to MasterApp format
+        await createMasterApp({
+            clientName: 'Legacy Client', // Default
+            platform: 'Unknown',        // Default
+            deviceCount: 0,             // Default
+            earning: 0,                 // Default
+            appName: task.appName,
+            packageName: task.packageName,
+            playStoreUrl: task.playStoreUrl,
+            acceptUrl: task.acceptUrl,
+            status: 'PUBLISHED'         // Legacy tasks are considered active/published
+        });
+        migratedCount++;
+    }
+
+    console.log(`Migration complete. Migrated: ${migratedCount}, Skipped: ${skippedCount}`);
+    return { migrated: migratedCount, skipped: skippedCount };
 }
