@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getMasterApps, updateMasterApp, createTask, deleteMasterAppAndTasks, migrateLegacyData, type MasterApp, type MasterAppStatus, type TaskType } from '@/lib/firestore';
+import { getMasterApps, updateMasterApp, createTask, deleteMasterAppAndTasks, type MasterApp, type MasterAppStatus, type TaskType } from '@/lib/firestore';
 import Link from 'next/link';
 
 function getTodayDate(): string {
@@ -13,7 +13,6 @@ export default function MasterDashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<MasterAppStatus | 'ALL'>('ALL');
-    const [migrating, setMigrating] = useState(false);
 
     const loadApps = async () => {
         setLoading(true);
@@ -84,36 +83,14 @@ export default function MasterDashboard() {
         }
     };
 
-    const handleMigrate = async () => {
-        if (!window.confirm("This will scan the last 3 months of daily tasks and import unique Apps into the Master List. Proceed?")) return;
-        setMigrating(true);
-        try {
-            const result = await migrateLegacyData();
-            alert(`Migration Complete!\nMigrated: ${result.migrated} apps.\nSkipped duplicates: ${result.skipped}`);
-            loadApps();
-        } catch (e) {
-            console.error('Migration failed', e);
-            alert('Migration failed');
-        } finally {
-            setMigrating(false);
-        }
-    }
-
     return (
-        <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="w-full px-4 py-8">
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Master Apps</h1>
                     <p className="text-gray-500 text-sm">Manage core client data and bulk-publish schedules.</p>
                 </div>
                 <div className="space-x-2">
-                    <button
-                        onClick={handleMigrate}
-                        disabled={migrating}
-                        className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-200 transition"
-                    >
-                        {migrating ? 'Migrating...' : 'Migrate Legacy Data'}
-                    </button>
                     <Link
                         href="/master/new"
                         className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"

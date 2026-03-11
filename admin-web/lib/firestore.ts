@@ -134,9 +134,9 @@ export function groupTasksByType(tasks: DailyTask[]): Record<TaskType, DailyTask
 export async function getMasterApps(status?: MasterAppStatus): Promise<MasterApp[]> {
     let q;
     if (status) {
-        q = query(collection(db, MASTER_APPS_COLLECTION), where('status', '==', status), orderBy('updatedAt', 'desc'));
+        q = query(collection(db, MASTER_APPS_COLLECTION), where('status', '==', status), orderBy('createdAt', 'desc'));
     } else {
-        q = query(collection(db, MASTER_APPS_COLLECTION), orderBy('updatedAt', 'desc'));
+        q = query(collection(db, MASTER_APPS_COLLECTION), orderBy('createdAt', 'desc'));
     }
 
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -198,7 +198,7 @@ export async function deleteMasterAppAndTasks(id: string, packageName?: string):
 }
 
 // --- Data Migration ---
-export async function migrateLegacyData(): Promise<{ migrated: number, skipped: number }> {
+export async function migrateLegacyData(): Promise<{ migrated: number, skipped: number, updated: number }> {
     const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
     const cutoffTime = Date.now() - NINETY_DAYS_MS;
 
@@ -221,16 +221,57 @@ export async function migrateLegacyData(): Promise<{ migrated: number, skipped: 
 
     console.log(`Found ${uniquePackages.size} unique packages.`);
 
-    // Fetch existing Master Apps to avoid duplicates
+    // Fetch existing Master Apps to avoid duplicates or update their dates
     const existingMasterApps = await getMasterApps();
-    const existingPackages = new Set(existingMasterApps.map(app => app.packageName).filter(Boolean));
+    const existingPackages = new Map<string, MasterApp>();
+    for (const app of existingMasterApps) {
+        if (app.packageName) {
+            existingPackages.set(app.packageName, app);
+        }
+    }
 
     let migratedCount = 0;
     let skippedCount = 0;
+    let updatedCount = 0;
 
     for (const [packageName, task] of uniquePackages.entries()) {
+        const packageTasks = recentTasks.filter(t => t.packageName === packageName);
+
+        // Find specific schedule tasks to extract dates
+        const testTask = packageTasks.find(t => t.taskType === 'TEST_APP');
+        const rateTask = packageTasks.find(t => t.taskType === 'RATE_APP');
+        const deleteTask = packageTasks.find(t => t.taskType === 'DELETE_APP');
+
+        let rateDate = rateTask?.date;
+        let deleteDate = deleteTask?.date;
+
+        // Auto-infer missing dates based strictly on the TEST_APP (input) date
+        if ((!rateDate || !deleteDate) && testTask?.date) {
+            const inputDate = new Date(testTask.date);
+            if (!rateDate) {
+                const rDate = new Date(inputDate);
+                rDate.setDate(rDate.getDate() + 12);
+                rateDate = rDate.toISOString().split('T')[0];
+            }
+            if (!deleteDate) {
+                const dDate = new Date(inputDate);
+                dDate.setDate(dDate.getDate() + 19);
+                deleteDate = dDate.toISOString().split('T')[0];
+            }
+        }
+
         if (existingPackages.has(packageName)) {
-            skippedCount++;
+            const existingApp = existingPackages.get(packageName)!;
+            // Update the existing master app if it's missing dates that we found
+            if ((rateDate && existingApp.rateDate !== rateDate) || (deleteDate && existingApp.deleteDate !== deleteDate)) {
+                await updateMasterApp(existingApp.id!, {
+                    ...(rateDate && { rateDate }),
+                    ...(deleteDate && { deleteDate })
+                });
+                updatedCount++;
+            } else {
+                skippedCount++;
+            }
             continue;
         }
 
@@ -244,11 +285,13 @@ export async function migrateLegacyData(): Promise<{ migrated: number, skipped: 
             packageName: task.packageName,
             playStoreUrl: task.playStoreUrl,
             acceptUrl: task.acceptUrl,
-            status: 'PUBLISHED'         // Legacy tasks are considered active/published
+            status: 'PUBLISHED',        // Legacy tasks are considered active/published
+            ...(rateDate && { rateDate }),
+            ...(deleteDate && { deleteDate })
         });
         migratedCount++;
     }
 
-    console.log(`Migration complete. Migrated: ${migratedCount}, Skipped: ${skippedCount}`);
-    return { migrated: migratedCount, skipped: skippedCount };
+    console.log(`Migration complete. Migrated: ${migratedCount}, Updated: ${updatedCount}, Skipped: ${skippedCount}`);
+    return { migrated: migratedCount, skipped: skippedCount, updated: updatedCount };
 }
