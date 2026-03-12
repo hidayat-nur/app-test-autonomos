@@ -4,17 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getMasterAppById, updateMasterApp, createTask, type MasterApp } from '@/lib/firestore';
+import { getTodayDate, addDays } from '@/lib/utils';
 import { use } from 'react';
 
-function getTodayDate(): string {
-    return new Date().toISOString().split('T')[0];
-}
-
-function addDays(dateStr: string, days: number): string {
-    const d = new Date(dateStr);
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
-}
 
 export default function PublishMasterAppPage({ params }: { params: Promise<{ id: string }> }) {
     const resolvedParams = use(params);

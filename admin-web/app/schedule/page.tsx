@@ -3,11 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getTasksByDate, deleteTask, groupTasksByType, type DailyTask, type TaskType } from '@/lib/firestore';
+import { getTodayDate } from '@/lib/utils';
 
-function getTodayDate(): string {
-  const today = new Date();
-  return today.toISOString().split('T')[0];
-}
 
 const TASK_TYPE_LABELS: Record<TaskType, string> = {
   DELETE_APP: 'Hapus App',

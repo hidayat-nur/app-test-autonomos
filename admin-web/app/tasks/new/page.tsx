@@ -4,10 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createTask } from '@/lib/firestore';
+import { getTodayDate } from '@/lib/utils';
 
-function getTodayDate(): string {
-    return new Date().toISOString().split('T')[0];
-}
 
 export default function NewNotePage() {
     const router = useRouter();
