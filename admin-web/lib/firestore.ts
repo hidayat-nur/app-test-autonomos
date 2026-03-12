@@ -1,5 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
+import { addDays } from './utils';
 import firebaseConfig from './firebase-config';
 
 // Initialize Firebase
@@ -258,16 +259,11 @@ export async function migrateLegacyData(): Promise<{ migrated: number, skipped: 
 
         // Auto-infer missing dates based strictly on the TEST_APP (input) date
         if ((!rateDate || !deleteDate) && testTask?.date) {
-            const inputDate = new Date(testTask.date);
             if (!rateDate) {
-                const rDate = new Date(inputDate);
-                rDate.setDate(rDate.getDate() + 12);
-                rateDate = rDate.toISOString().split('T')[0];
+                rateDate = addDays(testTask.date, 12);
             }
             if (!deleteDate) {
-                const dDate = new Date(inputDate);
-                dDate.setDate(dDate.getDate() + 19);
-                deleteDate = dDate.toISOString().split('T')[0];
+                deleteDate = addDays(testTask.date, 19);
             }
         }
 

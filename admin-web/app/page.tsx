@@ -1,23 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getMasterApps, updateMasterApp, createTask, deleteMasterAppAndTasks, type MasterApp, type MasterAppStatus, type TaskType } from '@/lib/firestore';
+import { getMasterApps, updateMasterApp, createTask, deleteMasterAppAndTasks, type MasterApp, type MasterAppStatus } from '@/lib/firestore';
+import { getTodayDate, addDays, getLocalDateFromTimestamp } from '@/lib/utils';
 import Link from 'next/link';
 
-function getTodayDate(): string {
-    return new Date().toISOString().split('T')[0];
-}
 
 function formatDate(dateStr: string): string {
     const [year, month, day] = dateStr.split('-').map(Number);
     return new Date(year, month - 1, day).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function addDays(dateStr: string, days: number): string {
-    const d = new Date(dateStr);
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
-}
 
 export default function MasterDashboard() {
     const [apps, setApps] = useState<MasterApp[]>([]);
@@ -401,12 +394,12 @@ export default function MasterDashboard() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className="text-sm text-gray-600 dark:text-gray-300">
-                                                    {app.createdAt ? formatDate(new Date(app.createdAt).toISOString().split('T')[0]) : '-'}
+                                                    {app.createdAt ? formatDate(getLocalDateFromTimestamp(app.createdAt)) : '-'}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className="text-sm text-gray-600 dark:text-gray-300">
-                                                    {app.publishedAt ? formatDate(new Date(app.publishedAt).toISOString().split('T')[0]) : <span className="text-gray-300">—</span>}
+                                                    {app.publishedAt ? formatDate(getLocalDateFromTimestamp(app.publishedAt)) : <span className="text-gray-300">—</span>}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
