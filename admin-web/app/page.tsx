@@ -144,7 +144,7 @@ export default function MasterDashboard() {
         try {
             const allApps = await getMasterApps();
             const nonArchived = allApps.filter(a => a.status !== 'ARCHIVED' && a.packageName);
-            const urls = nonArchived.map(a => `https://play.google.com/apps/testing/${a.packageName}`).join('\n');
+            const urls = nonArchived.map(a => `https://play.google.com/store/apps/details?id=${a.packageName}`).join('\n');
             if (!urls) { alert('Tidak ada app dengan package name (non-archived).'); return; }
             await navigator.clipboard.writeText(urls);
             setUrlsCopied(true);
