@@ -116,6 +116,46 @@ export default function MasterDashboard() {
     };
 
     const [bulkPushing, setBulkPushing] = useState(false);
+    const [copyingUrls, setCopyingUrls] = useState(false);
+    const [urlsCopied, setUrlsCopied] = useState(false);
+    const [copyingAccept, setCopyingAccept] = useState(false);
+    const [acceptCopied, setAcceptCopied] = useState(false);
+
+    const handleCopyAcceptUrls = async () => {
+        setCopyingAccept(true);
+        try {
+            const allApps = await getMasterApps();
+            const withAccept = allApps.filter(a => a.status !== 'ARCHIVED' && a.acceptUrl);
+            const urls = withAccept.map(a => `${a.acceptUrl}?authuser=2`).join('\n');
+            if (!urls) { alert('Tidak ada app dengan accept URL (non-archived).'); return; }
+            await navigator.clipboard.writeText(urls);
+            setAcceptCopied(true);
+            setTimeout(() => setAcceptCopied(false), 2000);
+        } catch (e) {
+            console.error(e);
+            alert('Gagal copy accept URL.');
+        } finally {
+            setCopyingAccept(false);
+        }
+    };
+
+    const handleCopyPlayStoreUrls = async () => {
+        setCopyingUrls(true);
+        try {
+            const allApps = await getMasterApps();
+            const nonArchived = allApps.filter(a => a.status !== 'ARCHIVED' && a.packageName);
+            const urls = nonArchived.map(a => `https://play.google.com/apps/testing/${a.packageName}`).join('\n');
+            if (!urls) { alert('Tidak ada app dengan package name (non-archived).'); return; }
+            await navigator.clipboard.writeText(urls);
+            setUrlsCopied(true);
+            setTimeout(() => setUrlsCopied(false), 2000);
+        } catch (e) {
+            console.error(e);
+            alert('Gagal copy URL.');
+        } finally {
+            setCopyingUrls(false);
+        }
+    };
 
     const handleBulkPush = async () => {
         const today = getTodayDate();
@@ -252,7 +292,23 @@ export default function MasterDashboard() {
                         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Master Apps</h1>
                         <p className="text-gray-500 text-sm">Manage core client data and bulk-publish schedules.</p>
                     </div>
-                    <div className="space-x-2">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleCopyAcceptUrls}
+                            disabled={copyingAccept}
+                            title="Copy semua Accept/Testing URL dari data tersimpan (kecuali Archived)"
+                            className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition disabled:opacity-50"
+                        >
+                            {acceptCopied ? '✓ Copied!' : copyingAccept ? 'Copying...' : '🔗 Copy Link Accept'}
+                        </button>
+                        <button
+                            onClick={handleCopyPlayStoreUrls}
+                            disabled={copyingUrls}
+                            title="Copy semua URL Play Store testing (kecuali Archived)"
+                            className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
+                        >
+                            {urlsCopied ? '✓ Copied!' : copyingUrls ? 'Copying...' : '📋 Copy URL Play Store'}
+                        </button>
                         <Link
                             href="/master/new"
                             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
