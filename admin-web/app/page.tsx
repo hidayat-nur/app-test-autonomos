@@ -495,6 +495,14 @@ export default function MasterDashboard() {
                                                         🚀 PUBLISH
                                                     </button>
                                                 )}
+                                                {(app.status === 'PUBLISHED' || app.status === 'ARCHIVED') && (
+                                                    <button
+                                                        onClick={() => openPublishModal(app)}
+                                                        className="inline-block text-indigo-600 font-bold hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                                    >
+                                                        🔄 Re-Publish
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => handleAction(app, 'UPDATE_APP')}
                                                     className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
