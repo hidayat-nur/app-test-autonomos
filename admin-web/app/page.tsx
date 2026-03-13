@@ -29,10 +29,10 @@ export default function MasterDashboard() {
             const today = getTodayDate();
             if (filter === 'RATE_TODAY') {
                 const data = await getMasterApps();
-                setApps(data.filter(a => a.rateDate === today && a.status !== 'DELETED'));
+                setApps(data.filter(a => a.rateDate === today && a.status !== 'DELETED' && a.status !== 'ARCHIVED'));
             } else if (filter === 'DELETE_TODAY') {
                 const data = await getMasterApps();
-                setApps(data.filter(a => a.deleteDate === today && a.status !== 'DELETED'));
+                setApps(data.filter(a => a.deleteDate === today && a.status !== 'DELETED' && a.status !== 'ARCHIVED'));
             } else {
                 const data = await getMasterApps(filter === 'ALL' ? undefined : filter as MasterAppStatus);
                 setApps(filter === 'ALL' ? data.filter(a => a.status !== 'ARCHIVED') : data);
