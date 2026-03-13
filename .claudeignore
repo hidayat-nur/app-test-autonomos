@@ -1,0 +1,34 @@
+# Kotlin/Android-specific ignores
+build/
+.gradle/
+app/build/
+*.class
+*.dex
+*.apk
+*.aar
+generated/
+.externalNativeBuild/
+.cxx/
+local.properties
+google-services.json   # sensitif
+release-key.jks        # keystore
+coverage/
+
+# Next.js & React ignores
+node_modules/
+.next/
+out/
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment variables
+.env*.local
+
+# Misc
+.DS_Store
+*.swp
