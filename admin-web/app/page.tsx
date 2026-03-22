@@ -16,23 +16,43 @@ export default function MasterDashboard() {
     const [apps, setApps] = useState<MasterApp[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [filter, setFilter] = useState<MasterAppStatus | 'ALL' | 'RATE_TODAY' | 'DELETE_TODAY'>('ALL');
+    const [filter, setFilter] = useState<MasterAppStatus | 'ALL' | 'RATE_TODAY' | 'DELETE_TODAY' | 'WARNING'>('ALL');
+    const [selectedDate, setSelectedDate] = useState(getTodayDate());
+    const [tabCounts, setTabCounts] = useState<Record<string, number>>({});
     const [search, setSearch] = useState('');
     const [publishModal, setPublishModal] = useState<MasterApp | null>(null);
     const [publishForm, setPublishForm] = useState({ appName: '', packageName: '', credentials: '', publishDate: getTodayDate() });
     const [publishing, setPublishing] = useState(false);
 
+    const loadCounts = async () => {
+        try {
+            const today = getTodayDate();
+            const all = await getMasterApps();
+            setTabCounts({
+                ALL: all.filter(a => a.status !== 'ARCHIVED').length,
+                DRAFT: all.filter(a => a.status === 'DRAFT').length,
+                PUBLISHED: all.filter(a => a.status === 'PUBLISHED').length,
+                ARCHIVED: all.filter(a => a.status === 'ARCHIVED').length,
+                RATE_TODAY: all.filter(a => a.rateDate === today && a.status !== 'DELETED' && a.status !== 'ARCHIVED').length,
+                DELETE_TODAY: all.filter(a => a.deleteDate === today && a.status !== 'DELETED' && a.status !== 'ARCHIVED').length,
+                WARNING: all.filter(a => a.warning && a.status !== 'DELETED').length,
+            });
+        } catch { /* silent */ }
+    };
+
     const loadApps = async () => {
         setLoading(true);
         setError(null);
         try {
-            const today = getTodayDate();
             if (filter === 'RATE_TODAY') {
                 const data = await getMasterApps();
-                setApps(data.filter(a => a.rateDate === today && a.status !== 'DELETED' && a.status !== 'ARCHIVED'));
+                setApps(data.filter(a => a.rateDate === selectedDate && a.status !== 'DELETED' && a.status !== 'ARCHIVED'));
             } else if (filter === 'DELETE_TODAY') {
                 const data = await getMasterApps();
-                setApps(data.filter(a => a.deleteDate === today && a.status !== 'DELETED' && a.status !== 'ARCHIVED'));
+                setApps(data.filter(a => a.deleteDate === selectedDate && a.status !== 'DELETED' && a.status !== 'ARCHIVED'));
+            } else if (filter === 'WARNING') {
+                const data = await getMasterApps();
+                setApps(data.filter(a => a.warning && a.status !== 'DELETED'));
             } else {
                 const data = await getMasterApps(filter === 'ALL' ? undefined : filter as MasterAppStatus);
                 setApps(filter === 'ALL' ? data.filter(a => a.status !== 'ARCHIVED') : data);
@@ -47,42 +67,46 @@ export default function MasterDashboard() {
 
     useEffect(() => {
         loadApps();
-    }, [filter]);
+    }, [filter, selectedDate]);
 
-    const handleAction = async (app: MasterApp, actionType: 'DELETE_APP' | 'RATE_APP' | 'UPDATE_APP') => {
+    useEffect(() => {
+        loadCounts();
+    }, []);
+
+    const handleAction = (app: MasterApp, actionType: 'DELETE_APP' | 'RATE_APP' | 'UPDATE_APP') => {
+        setActionDate(getTodayDate());
+        setActionModal({ app, actionType });
+    };
+
+    const handleActionSubmit = async () => {
+        if (!actionModal || !actionDate) return;
+        const { app, actionType } = actionModal;
+
         if (app.status === 'DRAFT') {
-            if (!window.confirm("Warning: This app hasn't been published yet (No URLs/Package Name). Are you sure you want to schedule this task?")) {
-                return;
-            }
+            if (!window.confirm("Warning: This app hasn't been published yet. Lanjut?")) return;
         }
 
-        const dateStr = window.prompt(`Enter Date for ${actionType} Task (YYYY-MM-DD):`, getTodayDate());
-        if (!dateStr) return;
-
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-            alert("Invalid date format. Please use YYYY-MM-DD.");
-            return;
-        }
-
+        setActionPushing(true);
         try {
             await createTask({
-                date: dateStr,
+                date: actionDate,
                 appName: app.appName || app.clientName || 'Unknown App',
                 packageName: app.packageName || '',
                 playStoreUrl: app.playStoreUrl || '',
                 acceptUrl: app.acceptUrl || '',
-                taskType: actionType
+                taskType: actionType,
             });
-
-            // If it's the uninstall task on a published app, mark it as archived on the master list
             if (actionType === 'DELETE_APP') {
                 await updateMasterApp(app.id!, { status: 'ARCHIVED' });
-                loadApps();
             }
-            alert(`Task scheduled for ${dateStr}!`);
+            alert(`Task dijadwalkan untuk ${formatDate(actionDate)}!`);
+            setActionModal(null);
+            loadApps(); loadCounts();
         } catch (err) {
             console.error(err);
-            alert('Action failed.');
+            alert('Action gagal.');
+        } finally {
+            setActionPushing(false);
         }
     };
 
@@ -93,29 +117,54 @@ export default function MasterDashboard() {
         try {
             await deleteMasterAppAndTasks(app.id!, app.packageName);
             alert('Master record and all related tasks wiped successfully.');
-            loadApps();
+            loadApps(); loadCounts();
         } catch (e) {
             console.error(e);
             alert('Failed to destroy master record');
         }
     };
 
+    const [warningModal, setWarningModal] = useState<MasterApp | null>(null);
+    const [warningNote, setWarningNote] = useState('');
+
+    const handleSetWarning = async () => {
+        if (!warningModal || !warningNote.trim()) return;
+        try {
+            await updateMasterApp(warningModal.id!, { warning: true, warningNote: warningNote.trim() });
+            setWarningModal(null);
+            loadApps();
+        } catch (e) { console.error(e); alert('Gagal set warning.'); }
+    };
+
+    const handleClearWarning = async (app: MasterApp) => {
+        try {
+            await updateMasterApp(app.id!, { warning: false, warningNote: '' });
+            loadApps();
+        } catch (e) { console.error(e); alert('Gagal clear warning.'); }
+    };
+
     const handleArchive = async (app: MasterApp) => {
         if (!window.confirm(`Archive "${app.clientName}"? App akan disembunyikan dari tab ALL/DRAFT/PUBLISHED.`)) return;
         try {
             await updateMasterApp(app.id!, { status: 'ARCHIVED' });
-            loadApps();
+            loadApps(); loadCounts();
         } catch (e) { console.error(e); alert('Gagal archive.'); }
     };
 
     const handleUnarchive = async (app: MasterApp) => {
         try {
             await updateMasterApp(app.id!, { status: 'DRAFT' });
-            loadApps();
+            loadApps(); loadCounts();
         } catch (e) { console.error(e); alert('Gagal unarchive.'); }
     };
 
-    const [bulkPushing, setBulkPushing] = useState(false);
+    const [actionModal, setActionModal] = useState<{ app: MasterApp; actionType: 'DELETE_APP' | 'RATE_APP' | 'UPDATE_APP' } | null>(null);
+    const [actionDate, setActionDate] = useState(getTodayDate());
+    const [actionPushing, setActionPushing] = useState(false);
+
+const [bulkPushing, setBulkPushing] = useState(false);
+    const [bulkPushModal, setBulkPushModal] = useState(false);
+    const [bulkPushDate, setBulkPushDate] = useState(getTodayDate());
     const [copyingUrls, setCopyingUrls] = useState(false);
     const [urlsCopied, setUrlsCopied] = useState(false);
     const [copyingAccept, setCopyingAccept] = useState(false);
@@ -158,17 +207,16 @@ export default function MasterDashboard() {
     };
 
     const handleBulkPush = async () => {
-        const today = getTodayDate();
         const taskType = filter === 'RATE_TODAY' ? 'RATE_APP' : 'DELETE_APP';
         const label = filter === 'RATE_TODAY' ? 'Rating' : 'Uninstall';
-        if (!window.confirm(`Dorong ${filteredApps.length} app ke task ${label} hari ini (${formatDate(today)})?`)) return;
+        setBulkPushModal(false);
         setBulkPushing(true);
         let done = 0;
         try {
             await Promise.all(
                 filteredApps.map(app =>
                     createTask({
-                        date: today,
+                        date: bulkPushDate,
                         appName: app.appName || app.clientName || 'Unknown',
                         packageName: app.packageName || '',
                         playStoreUrl: app.playStoreUrl || '',
@@ -177,8 +225,11 @@ export default function MasterDashboard() {
                     }).then(() => done++)
                 )
             );
-            alert(`Berhasil! ${done} task ${label} dijadwalkan untuk ${formatDate(today)}.`);
-            loadApps();
+            if (taskType === 'DELETE_APP') {
+                await Promise.all(filteredApps.map(app => updateMasterApp(app.id!, { status: 'ARCHIVED' })));
+            }
+            alert(`Berhasil! ${done} task ${label} dijadwalkan untuk ${formatDate(bulkPushDate)}.`);
+            loadApps(); loadCounts();
         } catch (e) {
             console.error(e);
             alert('Gagal push beberapa task.');
@@ -221,14 +272,10 @@ export default function MasterDashboard() {
                 status: 'PUBLISHED',
             });
             const commonTask = { appName, packageName, playStoreUrl, acceptUrl };
-            await Promise.all([
-                createTask({ ...commonTask, date: publishDate, taskType: 'TEST_APP' }),
-                createTask({ ...commonTask, date: addDays(publishDate, 12), taskType: 'RATE_APP' }),
-                createTask({ ...commonTask, date: addDays(publishDate, 19), taskType: 'DELETE_APP' }),
-            ]);
-            alert(`Berhasil publish! 3 task dijadwalkan mulai ${formatDate(publishDate)}.`);
+            await createTask({ ...commonTask, date: publishDate, taskType: 'TEST_APP' });
+            alert(`Berhasil publish! Task TEST_APP dijadwalkan ${formatDate(publishDate)}. Dorong Rate & Uninstall secara manual.`);
             setPublishModal(null);
-            loadApps();
+            loadApps(); loadCounts();
         } catch (err) {
             console.error(err);
             alert('Publish gagal.');
@@ -309,7 +356,7 @@ export default function MasterDashboard() {
                         >
                             {urlsCopied ? '✓ Copied!' : copyingUrls ? 'Copying...' : '📋 Copy URL Play Store'}
                         </button>
-                        <Link
+<Link
                             href="/master/new"
                             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
                         >
@@ -333,31 +380,60 @@ export default function MasterDashboard() {
                         <button
                             key={status}
                             onClick={() => setFilter(status)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filter === status
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${filter === status
                                 ? 'bg-blue-600 text-white shadow'
                                 : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border hover:bg-gray-50 dark:hover:bg-gray-700'
                                 }`}
                         >
                             {status}
+                            {tabCounts[status] !== undefined && (
+                                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${filter === status ? 'bg-white/25 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
+                                    {tabCounts[status]}
+                                </span>
+                            )}
                         </button>
                     ))}
                     <button
-                        onClick={() => setFilter('RATE_TODAY')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filter === 'RATE_TODAY'
+                        onClick={() => { setFilter('RATE_TODAY'); setSelectedDate(getTodayDate()); }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${filter === 'RATE_TODAY'
                             ? 'bg-yellow-500 text-white shadow'
                             : 'bg-white dark:bg-gray-800 text-yellow-600 border border-yellow-300 hover:bg-yellow-50'
                             }`}
                     >
-                        ⭐ Rating Hari Ini
+                        ⭐ Rating
+                        {tabCounts['RATE_TODAY'] !== undefined && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${filter === 'RATE_TODAY' ? 'bg-white/25 text-white' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {tabCounts['RATE_TODAY']}
+                            </span>
+                        )}
                     </button>
                     <button
-                        onClick={() => setFilter('DELETE_TODAY')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filter === 'DELETE_TODAY'
+                        onClick={() => { setFilter('DELETE_TODAY'); setSelectedDate(getTodayDate()); }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${filter === 'DELETE_TODAY'
                             ? 'bg-red-500 text-white shadow'
                             : 'bg-white dark:bg-gray-800 text-red-600 border border-red-300 hover:bg-red-50'
                             }`}
                     >
-                        🗑️ Uninstall Hari Ini
+                        🗑️ Uninstall
+                        {tabCounts['DELETE_TODAY'] !== undefined && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${filter === 'DELETE_TODAY' ? 'bg-white/25 text-white' : 'bg-red-100 text-red-700'}`}>
+                                {tabCounts['DELETE_TODAY']}
+                            </span>
+                        )}
+                    </button>
+                    <button
+                        onClick={() => setFilter('WARNING')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${filter === 'WARNING'
+                            ? 'bg-orange-500 text-white shadow'
+                            : 'bg-white dark:bg-gray-800 text-orange-600 border border-orange-300 hover:bg-orange-50'
+                            }`}
+                    >
+                        ⚠️ Warning
+                        {tabCounts['WARNING'] !== undefined && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${filter === 'WARNING' ? 'bg-white/25 text-white' : 'bg-orange-100 text-orange-700'}`}>
+                                {tabCounts['WARNING']}
+                            </span>
+                        )}
                     </button>
                 </div>
 
@@ -369,22 +445,47 @@ export default function MasterDashboard() {
                     </div>
                 )}
 
-                {/* Bulk push banner for today tabs */}
+                {/* Bulk push banner for rate/uninstall tabs */}
                 {(filter === 'RATE_TODAY' || filter === 'DELETE_TODAY') && !loading && (
-                    <div className={`mb-4 flex items-center justify-between p-4 rounded-lg border ${filter === 'RATE_TODAY' ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'}`}>
-                        <div>
-                            <p className={`font-semibold text-sm ${filter === 'RATE_TODAY' ? 'text-yellow-800' : 'text-red-800'}`}>
-                                {filter === 'RATE_TODAY' ? '⭐ Rating Hari Ini' : '🗑️ Uninstall Hari Ini'} — {filteredApps.length} app terjadwal
-                            </p>
-                            <p className="text-xs text-gray-500 mt-0.5">{formatDate(getTodayDate())}</p>
+                    <div className={`mb-4 p-4 rounded-lg border ${filter === 'RATE_TODAY' ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'}`}>
+                        <div className="flex items-center justify-between gap-4 flex-wrap">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <div>
+                                    <p className={`font-semibold text-sm ${filter === 'RATE_TODAY' ? 'text-yellow-800' : 'text-red-800'}`}>
+                                        {filter === 'RATE_TODAY' ? '⭐ Rating' : '🗑️ Uninstall'} — {filteredApps.length} app terjadwal
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                        {selectedDate === getTodayDate() ? 'Hari ini' : 'Tanggal dipilih'}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-500">Lihat tgl:</span>
+                                    <input
+                                        type="date"
+                                        value={selectedDate}
+                                        onChange={e => setSelectedDate(e.target.value)}
+                                        className={`border rounded-lg px-2 py-1 text-sm font-medium cursor-pointer focus:outline-none focus:ring-2 ${filter === 'RATE_TODAY'
+                                            ? 'border-yellow-300 bg-yellow-100 text-yellow-800 focus:ring-yellow-400'
+                                            : 'border-red-300 bg-red-100 text-red-800 focus:ring-red-400'}`}
+                                    />
+                                    {selectedDate !== getTodayDate() && (
+                                        <button
+                                            onClick={() => setSelectedDate(getTodayDate())}
+                                            className="text-xs text-gray-500 underline hover:text-gray-700"
+                                        >
+                                            Reset ke hari ini
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => { setBulkPushDate(getTodayDate()); setBulkPushModal(true); }}
+                                disabled={bulkPushing || filteredApps.length === 0}
+                                className={`px-5 py-2 rounded-lg text-sm font-bold text-white transition disabled:opacity-50 ${filter === 'RATE_TODAY' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-500 hover:bg-red-600'}`}
+                            >
+                                {bulkPushing ? 'Mendorong...' : `Dorong ${filteredApps.length} App →`}
+                            </button>
                         </div>
-                        <button
-                            onClick={handleBulkPush}
-                            disabled={bulkPushing || filteredApps.length === 0}
-                            className={`px-5 py-2 rounded-lg text-sm font-bold text-white transition disabled:opacity-50 ${filter === 'RATE_TODAY' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-500 hover:bg-red-600'}`}
-                        >
-                            {bulkPushing ? 'Mendorong...' : `Dorong ${filteredApps.length} App ke ${filter === 'RATE_TODAY' ? 'Rating' : 'Uninstall'} Semua →`}
-                        </button>
                     </div>
                 )}
 
@@ -415,7 +516,7 @@ export default function MasterDashboard() {
                                     </tr>
                                 ) : (
                                     sortedApps.map(app => (
-                                        <tr key={app.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                                        <tr key={app.id} className={`transition ${app.warning ? 'bg-orange-100 dark:bg-orange-900/40 border-l-4 border-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/60' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-1 group">
                                                     <span>{app.clientName}</span>
@@ -433,6 +534,12 @@ export default function MasterDashboard() {
                                                 </div>
                                                 <div className="text-xs text-gray-500">{app.packageName || 'No package'}</div>
                                                 <div className="text-xs text-gray-400 mt-1 max-w-[200px] truncate">{app.credentials || 'No credentials'}</div>
+                                                {app.warning && (
+                                                    <div className="mt-1.5 flex items-start gap-1 max-w-[220px]">
+                                                        <span className="text-orange-500 text-xs font-bold shrink-0">⚠️</span>
+                                                        <span className="text-xs text-orange-700 dark:text-orange-400 break-words">{app.warningNote}</span>
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm text-gray-900 dark:text-white capitalize">{app.platform}</div>
@@ -539,6 +646,21 @@ export default function MasterDashboard() {
                                                         ↩ Unarchive
                                                     </button>
                                                 )}
+                                                {app.warning ? (
+                                                    <button
+                                                        onClick={() => handleClearWarning(app)}
+                                                        className="block w-full bg-orange-50 text-orange-600 px-3 py-1 rounded text-xs hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 transition"
+                                                    >
+                                                        ✅ Unwarning
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => { setWarningNote(''); setWarningModal(app); }}
+                                                        className="block w-full bg-yellow-50 text-yellow-700 px-3 py-1 rounded text-xs hover:bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400 transition"
+                                                    >
+                                                        ⚠️ Warning
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => handleDestroyMaster(app)}
                                                     className="block w-full bg-red-50 text-red-600 px-3 py-1 rounded text-xs hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 transition"
@@ -554,6 +676,135 @@ export default function MasterDashboard() {
                     </div>
                 )}
             </div>
+
+            {/* Warning Modal */}
+            {warningModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">⚠️ Set Warning</h2>
+                            <button onClick={() => setWarningModal(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-1">App:</p>
+                        <p className="text-sm font-semibold text-blue-600 mb-4 truncate">
+                            {warningModal.appName || warningModal.clientName}
+                        </p>
+                        <div className="mb-5">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Info Warning *</label>
+                            <textarea
+                                value={warningNote}
+                                onChange={e => setWarningNote(e.target.value)}
+                                placeholder="Contoh: Rating ditolak, cek kebijakan Play Store..."
+                                rows={3}
+                                className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+                            />
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setWarningModal(null)}
+                                className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleSetWarning}
+                                disabled={!warningNote.trim()}
+                                className="flex-1 bg-orange-500 hover:bg-orange-600 font-bold py-2 rounded-lg text-sm text-white transition disabled:opacity-50"
+                            >
+                                Set Warning
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Single Action Date Modal */}
+            {actionModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                                {actionModal.actionType === 'RATE_APP' ? '⭐ Jadwalkan Rating' : actionModal.actionType === 'DELETE_APP' ? '🗑️ Jadwalkan Uninstall' : '🔄 Jadwalkan Update'}
+                            </h2>
+                            <button onClick={() => setActionModal(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-1">App:</p>
+                        <p className="text-sm font-semibold text-blue-600 mb-4 truncate">
+                            {actionModal.app.appName || actionModal.app.clientName}
+                        </p>
+                        <div className="mb-5">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tanggal Task *</label>
+                            <input
+                                type="date"
+                                value={actionDate}
+                                onChange={e => setActionDate(e.target.value)}
+                                className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <p className="text-xs text-gray-400 mt-1">{actionDate ? formatDate(actionDate) : ''}</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setActionModal(null)}
+                                className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleActionSubmit}
+                                disabled={!actionDate || actionPushing}
+                                className={`flex-1 font-bold py-2 rounded-lg text-sm text-white transition disabled:opacity-50
+                                    ${actionModal.actionType === 'RATE_APP' ? 'bg-yellow-500 hover:bg-yellow-600' :
+                                    actionModal.actionType === 'DELETE_APP' ? 'bg-red-500 hover:bg-red-600' :
+                                    'bg-green-500 hover:bg-green-600'}`}
+                            >
+                                {actionPushing ? 'Menyimpan...' : 'Jadwalkan →'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Push Date Modal */}
+            {bulkPushModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                                {filter === 'RATE_TODAY' ? '⭐ Dorong ke Rating' : '🗑️ Dorong ke Uninstall'}
+                            </h2>
+                            <button onClick={() => setBulkPushModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-4">
+                            {filteredApps.length} app akan dijadwalkan. Pilih tanggal tujuan task:
+                        </p>
+                        <div className="mb-5">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tanggal Dorong *</label>
+                            <input
+                                type="date"
+                                value={bulkPushDate}
+                                onChange={e => setBulkPushDate(e.target.value)}
+                                className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <p className="text-xs text-gray-400 mt-1">{bulkPushDate ? formatDate(bulkPushDate) : ''}</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setBulkPushModal(false)}
+                                className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleBulkPush}
+                                disabled={!bulkPushDate}
+                                className={`flex-1 font-bold py-2 rounded-lg text-sm text-white transition disabled:opacity-50 ${filter === 'RATE_TODAY' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-500 hover:bg-red-600'}`}
+                            >
+                                Dorong {filteredApps.length} App →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Publish Modal */}
             {

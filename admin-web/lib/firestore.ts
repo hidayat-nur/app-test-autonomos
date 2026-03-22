@@ -41,6 +41,8 @@ export interface MasterApp {
     rateDate?: string;
     deleteDate?: string;
     status: MasterAppStatus;
+    warning?: boolean;
+    warningNote?: string;
     createdAt: number;    // Tgl Order — when the record was first input
     publishedAt?: number; // Tgl Published — when the app actually went live
     updatedAt: number;
@@ -207,6 +209,17 @@ export async function deleteMasterAppAndTasks(id: string, packageName?: string):
         await Promise.all(deletePromises);
         console.log(`Cascade deleted ${deletePromises.length} tasks for package ${packageName}`);
     }
+}
+
+// Delete all RATE_APP & DELETE_APP tasks from a given date onwards (cleanup auto-created tasks)
+export async function deleteFutureRateDeleteTasks(fromDate: string): Promise<number> {
+    const allTasks = await getAllTasks();
+    const toDelete = allTasks.filter(t =>
+        t.date >= fromDate &&
+        (t.taskType === 'RATE_APP' || t.taskType === 'DELETE_APP')
+    );
+    await Promise.all(toDelete.map(t => deleteTask(t.id!)));
+    return toDelete.length;
 }
 
 // --- Data Migration ---
