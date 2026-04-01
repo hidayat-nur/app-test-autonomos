@@ -14,10 +14,272 @@ function toYYYYMM(year: number, month: number): string {
     return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
+function formatRp(amount: number): string {
+    return `Rp ${amount.toLocaleString('id-ID')}`;
+}
+
+function generateInvoiceNumber(name: string, period: string): string {
+    const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 3);
+    const periodClean = period.replace('-', '');
+    return `INV-${periodClean}-${initials}`;
+}
+
+interface InvoiceData {
+    recipientName: string;
+    recipientNickname: string;
+    period: string;
+    periodLabel: string;
+    gross: number;
+    totalOps: number;
+    net: number;
+    share: number;
+    opsList: OperationalCost[];
+}
+
+async function generateInvoicePDF(data: InvoiceData) {
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const contentW = pageW - margin * 2;
+
+    // ── Background ──────────────────────────────────────────
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, pageW, 60, 'F');
+
+    // Header accent line
+    doc.setFillColor(34, 197, 94); // green-500
+    doc.rect(0, 60, pageW, 3, 'F');
+
+    // ── Company Name ────────────────────────────────────────
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.text('BORDER TECH', margin, 28);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(148, 163, 184); // slate-400
+    doc.text('Sistem Manajemen Aplikasi & Penghasilan', margin, 36);
+    doc.text('border-tech.id', margin, 42);
+
+    // ── INVOICE label (top-right) ────────────────────────────
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(28);
+    doc.setTextColor(34, 197, 94); // green-500
+    doc.text('INVOICE', pageW - margin, 28, { align: 'right' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(148, 163, 184);
+    const invoiceNo = generateInvoiceNumber(data.recipientName, data.period);
+    doc.text(`No: ${invoiceNo}`, pageW - margin, 38, { align: 'right' });
+
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+    doc.text(`Tanggal: ${dateStr}`, pageW - margin, 45, { align: 'right' });
+
+    // ── Info Block ───────────────────────────────────────────
+    let y = 80;
+
+    // Bill To box
+    doc.setFillColor(241, 245, 249); // slate-100
+    doc.roundedRect(margin, y, (contentW / 2) - 5, 38, 3, 3, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text('DIPERUNTUKKAN KEPADA', margin + 6, y + 8);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42);
+    doc.text(data.recipientName, margin + 6, y + 18);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`(${data.recipientNickname})`, margin + 6, y + 26);
+    doc.text('Staff / Karyawan', margin + 6, y + 33);
+
+    // Period box
+    const boxX2 = margin + (contentW / 2) + 5;
+    const boxW2 = (contentW / 2) - 5;
+    doc.setFillColor(240, 253, 244); // green-50
+    doc.roundedRect(boxX2, y, boxW2, 38, 3, 3, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('PERIODE PEMBAYARAN', boxX2 + 6, y + 8);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42);
+    doc.text(data.periodLabel, boxX2 + 6, y + 18);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text('Bagi Hasil Bulanan', boxX2 + 6, y + 26);
+    doc.text(`1/3 dari Net Penghasilan`, boxX2 + 6, y + 33);
+
+    // ── Rincian Tabel ────────────────────────────────────────
+    y += 50;
+
+    // Table header
+    doc.setFillColor(15, 23, 42);
+    doc.roundedRect(margin, y, contentW, 10, 2, 2, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text('KETERANGAN', margin + 6, y + 6.5);
+    doc.text('JUMLAH', pageW - margin - 6, y + 6.5, { align: 'right' });
+
+    y += 10;
+
+    // Row helper
+    const drawRow = (label: string, value: string, bg: [number, number, number], textColor: [number, number, number] = [15, 23, 42]) => {
+        doc.setFillColor(...bg);
+        doc.rect(margin, y, contentW, 10, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        doc.setTextColor(...textColor);
+        doc.text(label, margin + 6, y + 6.5);
+        doc.setFont('helvetica', 'bold');
+        doc.text(value, pageW - margin - 6, y + 6.5, { align: 'right' });
+        y += 10;
+    };
+
+    // Gross
+    drawRow('Total Pendapatan Kotor (Gross)', formatRp(data.gross), [248, 250, 252]);
+
+    // Operational costs detail
+    if (data.opsList.length > 0) {
+        data.opsList.forEach((op, idx) => {
+            drawRow(
+                `  - ${op.name}`,
+                `- ${formatRp(op.amount)}`,
+                idx % 2 === 0 ? [255, 247, 237] : [255, 251, 245],
+                [194, 65, 12]
+            );
+        });
+    } else {
+        drawRow('  - Biaya Operasional', `- ${formatRp(data.totalOps)}`, [255, 247, 237], [194, 65, 12]);
+    }
+
+    // Total ops
+    doc.setFillColor(254, 226, 226); // red-100
+    doc.rect(margin, y, contentW, 10, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(185, 28, 28);
+    doc.text('Total Potongan Operasional', margin + 6, y + 6.5);
+    doc.text(`- ${formatRp(data.totalOps)}`, pageW - margin - 6, y + 6.5, { align: 'right' });
+    y += 10;
+
+    // Net
+    doc.setFillColor(220, 252, 231); // green-100
+    doc.rect(margin, y, contentW, 10, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(22, 101, 52);
+    doc.text('Net Penghasilan (setelah operasional)', margin + 6, y + 6.5);
+    doc.text(formatRp(data.net), pageW - margin - 6, y + 6.5, { align: 'right' });
+    y += 10;
+
+    // Divider
+    doc.setFillColor(34, 197, 94);
+    doc.rect(margin, y, contentW, 1, 'F');
+    y += 6;
+
+    // Share (1/3)
+    doc.setFillColor(21, 128, 61); // green-700
+    doc.roundedRect(margin, y, contentW, 16, 3, 3, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Bagian ${data.recipientNickname} (1/3 Net)`, margin + 6, y + 10);
+    doc.setFontSize(12);
+    doc.text(formatRp(data.share), pageW - margin - 6, y + 10, { align: 'right' });
+    y += 16;
+
+    // ── Total Box ────────────────────────────────────────────
+    y += 6;
+    doc.setFillColor(15, 23, 42);
+    doc.roundedRect(margin, y, contentW, 22, 4, 4, 'F');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(148, 163, 184);
+    doc.text('TOTAL YANG DITERIMA', pageW - margin - 6, y + 9, { align: 'right' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(34, 197, 94);
+    doc.text(formatRp(data.share), pageW - margin - 6, y + 19, { align: 'right' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text(data.recipientName.toUpperCase(), margin + 6, y + 14);
+
+    y += 22;
+
+    // ── Signature Area ───────────────────────────────────────
+    y += 14;
+    const sigColW = contentW / 3;
+
+    const drawSigBox = (label: string, name: string, xOff: number) => {
+        const bx = margin + xOff;
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(bx, y, sigColW - 4, 38, 3, 3, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text(label, bx + (sigColW - 4) / 2, y + 7, { align: 'center' });
+        // Signature line
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        doc.line(bx + 8, y + 28, bx + sigColW - 12, y + 28);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(15, 23, 42);
+        doc.text(name, bx + (sigColW - 4) / 2, y + 35, { align: 'center' });
+    };
+
+    drawSigBox('Dibuat oleh,', 'Bos Nur', 0);
+    drawSigBox('Disetujui oleh,', 'Bos Nur', sigColW);
+    drawSigBox('Diterima oleh,', data.recipientNickname, sigColW * 2);
+
+    // ── Footer ───────────────────────────────────────────────
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, pageH - 18, pageW, 18, 'F');
+    doc.setFillColor(34, 197, 94);
+    doc.rect(0, pageH - 18, pageW, 1.5, 'F');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+        `${invoiceNo}  |  Digenerate otomatis pada ${dateStr}  |  Border Tech`,
+        pageW / 2,
+        pageH - 7,
+        { align: 'center' }
+    );
+
+    // ── Save ─────────────────────────────────────────────────
+    const filename = `${invoiceNo}.pdf`;
+    doc.save(filename);
+}
+
 export default function EarningsDashboard() {
     const [apps, setApps] = useState<MasterApp[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<QuickFilter>('THIS_MONTH');
+    const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
 
     const now = new Date();
     const [pickerMonth, setPickerMonth] = useState(now.getMonth());
@@ -34,7 +296,7 @@ export default function EarningsDashboard() {
     const activeMonthYYYYMM: string | null = (() => {
         if (filter === 'CUSTOM') return toYYYYMM(pickerYear, pickerMonth);
         if (filter === 'THIS_MONTH') return toYYYYMM(now.getFullYear(), now.getMonth());
-        return null; // no month-scope for TODAY, THIS_YEAR, ALL_TIME
+        return null;
     })();
 
     useEffect(() => {
@@ -119,6 +381,30 @@ export default function EarningsDashboard() {
         : filter === 'THIS_MONTH'
             ? `${MONTHS[now.getMonth()]} ${now.getFullYear()}`
             : filter.replace(/_/g, ' ');
+
+    const activePeriod = activeMonthYYYYMM ?? toYYYYMM(now.getFullYear(), now.getMonth());
+
+    const handleGenerateInvoice = async (
+        recipientName: string,
+        recipientNickname: string,
+    ) => {
+        setGeneratingPdf(recipientNickname);
+        try {
+            await generateInvoicePDF({
+                recipientName,
+                recipientNickname,
+                period: activePeriod,
+                periodLabel: filterLabel,
+                gross,
+                totalOps,
+                net,
+                share: Math.floor(net / 3),
+                opsList: ops,
+            });
+        } finally {
+            setGeneratingPdf(null);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
@@ -254,17 +540,72 @@ export default function EarningsDashboard() {
                 {/* Earnings Split */}
                 {!loading && net > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Bos Nur */}
                         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6 text-center border-t-4 border-blue-500">
                             <p className="text-gray-500 dark:text-gray-400 text-sm font-medium uppercase tracking-wide">Bos Nur (1/3)</p>
                             <p className="mt-2 text-2xl font-bold text-blue-600">Rp {Math.floor(net / 3).toLocaleString('id-ID')}</p>
                         </div>
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6 text-center border-t-4 border-pink-500">
-                            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium uppercase tracking-wide">Cici Linda (1/3)</p>
-                            <p className="mt-2 text-2xl font-bold text-pink-600">Rp {Math.floor(net / 3).toLocaleString('id-ID')}</p>
+
+                        {/* Cici Linda */}
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6 text-center border-t-4 border-pink-500 flex flex-col gap-3">
+                            <div>
+                                <p className="text-gray-500 dark:text-gray-400 text-sm font-medium uppercase tracking-wide">Cici Linda (1/3)</p>
+                                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Siti Melinda Sari</p>
+                                <p className="mt-2 text-2xl font-bold text-pink-600">Rp {Math.floor(net / 3).toLocaleString('id-ID')}</p>
+                            </div>
+                            <button
+                                onClick={() => handleGenerateInvoice('Siti Melinda Sari', 'Cici Linda')}
+                                disabled={generatingPdf !== null}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-pink-500 hover:bg-pink-600 disabled:opacity-60 text-white rounded-xl text-sm font-bold transition-all shadow-md hover:shadow-pink-200 dark:hover:shadow-pink-900"
+                            >
+                                {generatingPdf === 'Cici Linda' ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                                        </svg>
+                                        Generating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                                        </svg>
+                                        Generate Invoice PDF
+                                    </>
+                                )}
+                            </button>
                         </div>
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6 text-center border-t-4 border-purple-500">
-                            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium uppercase tracking-wide">Cici Zulfa (1/3)</p>
-                            <p className="mt-2 text-2xl font-bold text-purple-600">Rp {Math.floor(net / 3).toLocaleString('id-ID')}</p>
+
+                        {/* Cici Zulfa */}
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow p-6 text-center border-t-4 border-purple-500 flex flex-col gap-3">
+                            <div>
+                                <p className="text-gray-500 dark:text-gray-400 text-sm font-medium uppercase tracking-wide">Cici Zulfa (1/3)</p>
+                                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Zulfa Astri Lutfiah</p>
+                                <p className="mt-2 text-2xl font-bold text-purple-600">Rp {Math.floor(net / 3).toLocaleString('id-ID')}</p>
+                            </div>
+                            <button
+                                onClick={() => handleGenerateInvoice('Zulfa Astri Lutfiah', 'Cici Zulfa')}
+                                disabled={generatingPdf !== null}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-60 text-white rounded-xl text-sm font-bold transition-all shadow-md hover:shadow-purple-200 dark:hover:shadow-purple-900"
+                            >
+                                {generatingPdf === 'Cici Zulfa' ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                                        </svg>
+                                        Generating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                                        </svg>
+                                        Generate Invoice PDF
+                                    </>
+                                )}
+                            </button>
                         </div>
                     </div>
                 )}
