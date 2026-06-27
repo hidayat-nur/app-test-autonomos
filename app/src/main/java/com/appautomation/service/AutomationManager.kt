@@ -47,10 +47,8 @@ class AutomationManager @Inject constructor(
     private val automationScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     
     private var isPaused = false
-    private var pausedApp: AppTask? = null
-    private var pausedRemainingTime: Long = 0
+    private var pausedSession: PausedSession? = null
     private var sessionStartTime: Long = 0
-    private var pausedSessionStartTime: Long = 0
     
     /**
      * Start automation with list of apps
@@ -67,10 +65,19 @@ class AutomationManager @Inject constructor(
         }
         
         stopAutomation() // Stop any existing automation
-        
+
+        // Fresh run: start counts at zero, full app list, new session clock.
+        launchRun(apps, startCompletedCount = 0, totalCount = apps.size, sessionStart = System.currentTimeMillis())
+    }
+
+    /**
+     * Launch the automation coroutine. Used by both a fresh start and a resume;
+     * the difference is purely in the counts/session-clock passed in.
+     */
+    private fun launchRun(apps: List<AppTask>, startCompletedCount: Int, totalCount: Int, sessionStart: Long) {
         automationJob = automationScope.launch {
             try {
-                runAutomation(apps)
+                runAutomation(apps, startCompletedCount, totalCount, sessionStart)
             } catch (e: CancellationException) {
                 Log.d(TAG, "Automation cancelled")
                 if (!isPaused) {
@@ -86,18 +93,17 @@ class AutomationManager @Inject constructor(
     /**
      * Main automation loop
      */
-    private suspend fun CoroutineScope.runAutomation(apps: List<AppTask>) {
-        var completedCount = 0
-        val totalCount = apps.size
-        
-        // Initialize session start time or restore from pause
-        if (sessionStartTime == 0L || !isPaused) {
-            sessionStartTime = System.currentTimeMillis()
-        } else {
-            // Restore from pause - adjust start time to maintain elapsed time
-            sessionStartTime = pausedSessionStartTime
-        }
-        
+    private suspend fun CoroutineScope.runAutomation(
+        apps: List<AppTask>,
+        startCompletedCount: Int,
+        totalCount: Int,
+        sessionStart: Long
+    ) {
+        var completedCount = startCompletedCount
+
+        // Session clock is decided by the caller (fresh start vs resume).
+        sessionStartTime = sessionStart
+
         for ((index, appTask) in apps.withIndex()) {
             if (!isActive) break
 
@@ -250,37 +256,46 @@ class AutomationManager @Inject constructor(
      * Pause automation
      */
     fun pauseAutomation() {
-        if (_automationState.value is AutomationState.Running) {
-            val currentState = _automationState.value as AutomationState.Running
-            pausedApp = currentState.currentApp
-            pausedRemainingTime = currentState.remainingTimeMillis
-            pausedSessionStartTime = sessionStartTime
+        val currentState = _automationState.value
+        if (currentState is AutomationState.Running) {
+            // B1: capture the FULL remaining queue (current app + everything after it)
+            // so resume can continue the whole run instead of just the current app.
+            pausedSession = PausedSession(
+                currentApp = currentState.currentApp,
+                remainingTimeMillis = currentState.remainingTimeMillis,
+                remainingQueue = currentState.queue,
+                completedCount = currentState.completedCount,
+                totalCount = currentState.totalCount,
+                elapsedTimeMillis = currentState.elapsedTimeMillis
+            )
             isPaused = true
-            
+
             automationJob?.cancel()
-            
+
             // Stop interactions
             AutomationAccessibilityService.getInstance()?.stopRandomInteractions()
-            
+
             _automationState.value = AutomationState.Paused
             Log.d(TAG, "Automation paused")
         }
     }
-    
+
     /**
      * Resume automation
      */
     fun resumeAutomation() {
-        if (_automationState.value is AutomationState.Paused && pausedApp != null) {
-            val app = pausedApp!!.copy(durationMillis = pausedRemainingTime)
+        val paused = pausedSession
+        if (_automationState.value is AutomationState.Paused && paused != null) {
+            val plan = buildResumePlan(paused, System.currentTimeMillis())
             isPaused = false
-            
-            // Continue with remaining apps
-            val currentState = _automationState.value as? AutomationState.Paused
-            // For simplicity, restart the current app
-            startAutomation(listOf(app))
-            
-            Log.d(TAG, "Automation resumed")
+            pausedSession = null
+
+            // Cancel any lingering job WITHOUT going through stopAutomation() (which
+            // would wipe the saved session); then relaunch the full remaining queue.
+            automationJob?.cancel()
+            launchRun(plan.apps, plan.startCompletedCount, plan.totalCount, plan.sessionStartTime)
+
+            Log.d(TAG, "Automation resumed with ${plan.apps.size} app(s) remaining")
         }
     }
     
@@ -291,9 +306,8 @@ class AutomationManager @Inject constructor(
         automationJob?.cancel()
         automationJob = null
         isPaused = false
-        pausedApp = null
-        pausedRemainingTime = 0
-        
+        pausedSession = null
+
         // Stop interactions
         AutomationAccessibilityService.getInstance()?.stopRandomInteractions()
         
