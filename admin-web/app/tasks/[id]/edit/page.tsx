@@ -17,6 +17,7 @@ export default function EditTaskPage({ params }: { params: Promise<{ id: string 
         taskType: 'DELETE_APP' as TaskType,
         playStoreUrl: '',
         acceptUrl: '',
+        credentials: '',
     });
 
     useEffect(() => {
@@ -30,6 +31,7 @@ export default function EditTaskPage({ params }: { params: Promise<{ id: string 
                         taskType: task.taskType,
                         playStoreUrl: task.playStoreUrl,
                         acceptUrl: task.acceptUrl,
+                        credentials: task.credentials || '',
                     });
                 } else {
                     alert('Task not found');
@@ -185,6 +187,21 @@ export default function EditTaskPage({ params }: { params: Promise<{ id: string 
                                 placeholder="https://..."
                                 className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             />
+                        </div>
+                    )}
+
+                    {/* Login credentials (only for TEST_APP, optional) */}
+                    {form.taskType === 'TEST_APP' && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Login Credentials (optional)</label>
+                            <input
+                                type="text"
+                                value={form.credentials}
+                                onChange={(e) => setForm({ ...form, credentials: e.target.value })}
+                                placeholder="username:password"
+                                className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Akan tampil sebagai popup login di app (format username:password).</p>
                         </div>
                     )}
 

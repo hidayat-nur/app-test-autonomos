@@ -52,7 +52,7 @@ export default function PublishMasterAppPage({ params }: { params: Promise<{ id:
         e.preventDefault();
         if (!appData) return;
 
-        if (!publishDate || !appName || !packageName || !playStoreUrl || !acceptUrl || !credentials) {
+        if (!publishDate || !appName || !packageName || !playStoreUrl || !acceptUrl) {
             alert("All technical fields and a Publish Date must be filled to publish this app.");
             return;
         }
@@ -76,7 +76,8 @@ export default function PublishMasterAppPage({ params }: { params: Promise<{ id:
                 appName,
                 packageName,
                 playStoreUrl,
-                acceptUrl
+                acceptUrl,
+                credentials // carried to the daily tasks (shown on TEST_APP in the app)
             };
 
             await Promise.all([
@@ -161,12 +162,11 @@ export default function PublishMasterAppPage({ params }: { params: Promise<{ id:
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Account Credentials *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Account Credentials (optional)</label>
                         <input
                             type="text"
                             value={credentials}
                             onChange={e => setCredentials(e.target.value)}
-                            required
                             placeholder="e.g. user:pass"
                             className="w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:border-gray-600"
                         />

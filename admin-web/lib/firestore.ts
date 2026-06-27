@@ -18,6 +18,7 @@ export interface DailyTask {
     taskType: TaskType;
     playStoreUrl: string;
     acceptUrl: string;
+    credentials?: string; // Login akun "username:password" (opsional, untuk TEST_APP)
     createdAt: number;
 }
 

@@ -29,6 +29,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -491,20 +496,48 @@ private fun RateTaskItem(task: DailyTask, onRateClick: () -> Unit) {
 
 @Composable
 private fun TestTaskItem(task: DailyTask, onAcceptClick: () -> Unit, onAppClick: () -> Unit) {
+    var showCredentials by remember { mutableStateOf(false) }
+    val hasCred = task.hasCredentials
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .padding(vertical = 4.dp)
+            .then(if (hasCred) Modifier.clickable { showCredentials = true } else Modifier),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        // Apps that need a login are tinted so they stand out in the list.
+        colors = if (hasCred) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+        } else {
+            CardDefaults.cardColors()
+        }
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = task.appName, fontWeight = FontWeight.Medium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = task.appName, fontWeight = FontWeight.Medium)
+                    if (hasCred) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "🔑 Login",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
                 Text(text = task.packageName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (hasCred) {
+                    Text(
+                        text = "Ketuk kartu untuk lihat login",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
             }
             Button(onClick = onAcceptClick) {
                 Text("Accept")
@@ -513,6 +546,64 @@ private fun TestTaskItem(task: DailyTask, onAcceptClick: () -> Unit, onAppClick:
             Button(onClick = onAppClick) {
                 Text("App")
             }
+        }
+    }
+
+    if (showCredentials) {
+        CredentialsDialog(task = task, onDismiss = { showCredentials = false })
+    }
+}
+
+@Composable
+private fun CredentialsDialog(task: DailyTask, onDismiss: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+
+    fun copy(label: String, value: String) {
+        clipboard.setText(AnnotatedString(value))
+        Toast.makeText(context, "$label disalin", Toast.LENGTH_SHORT).show()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Login • ${task.appName}") },
+        text = {
+            Column {
+                CredentialRow(
+                    label = "Username",
+                    value = task.credentialUsername,
+                    onCopy = { copy("Username", it) }
+                )
+                if (task.credentialPassword.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    CredentialRow(
+                        label = "Password",
+                        value = task.credentialPassword,
+                        onCopy = { copy("Password", it) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Tutup") }
+        }
+    )
+}
+
+@Composable
+private fun CredentialRow(label: String, value: String, onCopy: (String) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(text = label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = value,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = { onCopy(value) }) { Text("Salin") }
         }
     }
 }
