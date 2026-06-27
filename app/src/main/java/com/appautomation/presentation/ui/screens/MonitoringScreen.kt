@@ -108,10 +108,72 @@ fun MonitoringScreen(
                     )
                 }
                 
+                is AutomationManager.AutomationState.RatingRunning -> {
+                    RatingStateContent(
+                        appName = currentState.currentApp.appName,
+                        completedCount = currentState.completedCount,
+                        totalCount = currentState.totalCount,
+                        onStop = {
+                            viewModel.stopAutomation()
+                            context.stopService(Intent(context, AutomationForegroundService::class.java))
+                            onNavigateBack()
+                        }
+                    )
+                }
+
+                is AutomationManager.AutomationState.RatingCompleted -> {
+                    CompletedStateContent(
+                        completedCount = currentState.completedCount,
+                        totalCount = currentState.totalCount,
+                        onDismiss = { onNavigateBack() }
+                    )
+                }
+
                 is AutomationManager.AutomationState.Idle -> {
                     IdleStateContent(onNavigateBack)
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun RatingStateContent(
+    appName: String,
+    completedCount: Int,
+    totalCount: Int,
+    onStop: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.Star,
+            contentDescription = null,
+            modifier = Modifier.size(72.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            "Rating apps…",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(appName, style = MaterialTheme.typography.bodyLarge)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "${completedCount} of ${totalCount} done",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(40.dp))
+        OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
+            Text("Stop")
         }
     }
 }

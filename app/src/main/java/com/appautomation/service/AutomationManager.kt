@@ -1,9 +1,13 @@
 package com.appautomation.service
 
+import android.content.Context
 import android.util.Log
+import com.appautomation.R
 import com.appautomation.data.model.AppTask
 import com.appautomation.data.model.AutomationLog
 import com.appautomation.data.repository.AppRepository
+import com.appautomation.util.ReviewPicker
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,16 +17,22 @@ import javax.inject.Singleton
 
 @Singleton
 class AutomationManager @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val appLauncher: AppLauncher,
     private val appMonitor: AppMonitor,
     private val repository: AppRepository
 ) {
-    
+
     companion object {
         private const val TAG = "AutomationManager"
         private const val LAUNCH_GRACE_PERIOD = 3000L // 3 seconds for app to open
         private const val MAX_LAUNCH_RETRIES = 3
         private const val INTERACTION_INTERVAL_SECONDS = 15
+
+        // Auto-rating tuning.
+        private const val RATING_STARS = 5
+        private const val PLAY_STORE_LOAD_DELAY = 4000L // wait for the store page to render
+        private const val RATING_GAP_DELAY = 1500L      // small gap between apps
     }
     
     sealed class AutomationState {
@@ -38,6 +48,14 @@ class AutomationManager @Inject constructor(
         object Paused : AutomationState()
         data class Completed(val completedCount: Int, val totalCount: Int) : AutomationState()
         data class Error(val message: String) : AutomationState()
+
+        // Auto-rating batch states.
+        data class RatingRunning(
+            val currentApp: AppTask,
+            val completedCount: Int,
+            val totalCount: Int
+        ) : AutomationState()
+        data class RatingCompleted(val completedCount: Int, val totalCount: Int) : AutomationState()
     }
     
     private val _automationState = MutableStateFlow<AutomationState>(AutomationState.Idle)
@@ -299,6 +317,100 @@ class AutomationManager @Inject constructor(
         }
     }
     
+    /**
+     * T5: Rate all given apps one-by-one on the Play Store (5 stars + a random
+     * positive review). Sequential, best-effort: a failed app is logged and the
+     * batch continues. Reuses automationJob so the existing Stop button works.
+     */
+    fun startRatingAll(apps: List<AppTask>) {
+        if (apps.isEmpty()) {
+            Log.w(TAG, "No apps to rate")
+            return
+        }
+
+        stopAutomation() // cancel anything in flight
+
+        val templates = try {
+            context.resources.getStringArray(R.array.review_templates).toList()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load review templates", e)
+            emptyList()
+        }
+
+        automationJob = automationScope.launch {
+            try {
+                runRating(apps, templates)
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Rating cancelled")
+                _automationState.value = AutomationState.Idle
+            } catch (e: Exception) {
+                Log.e(TAG, "Rating error", e)
+                _automationState.value = AutomationState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
+    private suspend fun CoroutineScope.runRating(apps: List<AppTask>, templates: List<String>) {
+        var completed = 0
+        val total = apps.size
+        var lastReview: String? = null
+
+        for ((index, appTask) in apps.withIndex()) {
+            if (!isActive) break
+
+            _automationState.value = AutomationState.RatingRunning(appTask, completed, total)
+            Log.d(TAG, "⭐ Rating ${appTask.appName} (${index + 1}/$total)")
+
+            var success = false
+            var errorMsg: String? = null
+            try {
+                val opened = appLauncher.openInPlayStore(appTask.packageName)
+                if (!opened) {
+                    errorMsg = "Failed to open Play Store for ${appTask.appName}"
+                } else {
+                    delay(PLAY_STORE_LOAD_DELAY)
+
+                    val review = ReviewPicker.pick(templates, lastReview)
+                    lastReview = review
+
+                    val service = AutomationAccessibilityService.getInstance()
+                    if (service == null) {
+                        errorMsg = "Accessibility service not available"
+                    } else {
+                        success = service.performRatingOnCurrentScreen(RATING_STARS, review)
+                        if (!success) errorMsg = "Rating UI not found / timed out"
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorMsg = e.message ?: "Runtime error"
+                Log.e(TAG, "❌ Rating failed for ${appTask.appName}", e)
+            }
+
+            repository.logAutomation(
+                AutomationLog(
+                    timestamp = System.currentTimeMillis(),
+                    appPackage = appTask.packageName,
+                    appName = appTask.appName,
+                    durationMillis = 0,
+                    success = success,
+                    errorMessage = errorMsg
+                )
+            )
+            if (success) completed++
+
+            if (index < apps.size - 1 && isActive) {
+                delay(RATING_GAP_DELAY)
+            }
+        }
+
+        if (isActive) {
+            _automationState.value = AutomationState.RatingCompleted(completed, total)
+            Log.d(TAG, "Rating completed: $completed/$total apps")
+        }
+    }
+
     /**
      * Stop automation completely
      */

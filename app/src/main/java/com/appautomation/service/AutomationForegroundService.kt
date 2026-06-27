@@ -123,6 +123,27 @@ class AutomationForegroundService : Service() {
                         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
                         notificationManager.notify(NOTIFICATION_ID, notification)
                     }
+                    is AutomationManager.AutomationState.RatingRunning -> {
+                        val notification = createNotification(
+                            "Rating ${state.currentApp.appName} (${state.completedCount + 1}/${state.totalCount})",
+                            0
+                        )
+                        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                        notificationManager.notify(NOTIFICATION_ID, notification)
+                    }
+                    is AutomationManager.AutomationState.RatingCompleted -> {
+                        try {
+                            delay(500)
+                            val intent = Intent(this@AutomationForegroundService, MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            }
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            android.util.Log.e(TAG, "Failed to launch MainActivity after rating", e)
+                        }
+                        delay(2000)
+                        stopSelf()
+                    }
                     is AutomationManager.AutomationState.Idle -> {
                         // Will stop service
                     }

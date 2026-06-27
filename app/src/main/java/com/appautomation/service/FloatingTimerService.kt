@@ -216,9 +216,15 @@ class FloatingTimerService : Service() {
                     is AutomationManager.AutomationState.Paused -> {
                         if (seenRunning) pauseButton?.text = "▶️"
                     }
+                    is AutomationManager.AutomationState.RatingRunning -> {
+                        seenRunning = true
+                        timerText?.text = "⭐"
+                        appNameText?.text = state.currentApp.appName
+                    }
                     is AutomationManager.AutomationState.Completed,
                     is AutomationManager.AutomationState.Error,
-                    is AutomationManager.AutomationState.Idle -> {
+                    is AutomationManager.AutomationState.Idle,
+                    is AutomationManager.AutomationState.RatingCompleted -> {
                         if (seenRunning) {
                             hideFloatingBubble()
                             stopSelf()
