@@ -264,6 +264,19 @@ class AppSelectionViewModel @Inject constructor(
         return true
     }
     
+    /**
+     * Rate ALL selected apps (not batched) one-by-one on the Play Store.
+     * Returns false if nothing is selected.
+     */
+    fun startRatingAll(): Boolean {
+        val allTasks = _selectedApps.value.values.toList()
+        if (allTasks.isEmpty()) {
+            return false
+        }
+        automationManager.startRatingAll(allTasks)
+        return true
+    }
+
     private fun getCurrentBatch(allTasks: List<AppTask>): List<AppTask> {
         val startIndex = _currentBatchIndex.value * _batchSize.value
         if (startIndex >= allTasks.size) {
