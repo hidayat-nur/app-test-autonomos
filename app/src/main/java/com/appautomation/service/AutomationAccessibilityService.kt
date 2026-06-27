@@ -14,6 +14,9 @@ class AutomationAccessibilityService : AccessibilityService() {
     
     companion object {
         private const val TAG = "AccessibilityService"
+
+        // Max wait per rating step (find star / edit field / post button).
+        private const val RATING_STEP_TIMEOUT = 8000L
         
         @Volatile
         private var instance: AutomationAccessibilityService? = null
@@ -711,6 +714,148 @@ class AutomationAccessibilityService : AccessibilityService() {
         }
     }
     
+    // ----------------------------------------------------------------------
+    // Auto-rating (T3 helpers + T4 flow). Operates on the CURRENTLY visible
+    // Play Store details page (AutomationManager opens it first). Best-effort:
+    // each step has a timeout; a miss returns false so the caller can skip.
+    // ----------------------------------------------------------------------
+
+    /** Generic depth-limited search for the first node matching [predicate]. */
+    private fun findNode(predicate: (android.view.accessibility.AccessibilityNodeInfo) -> Boolean): android.view.accessibility.AccessibilityNodeInfo? {
+        val root = try { rootInActiveWindow } catch (e: Exception) { null } ?: return null
+        return findNodeRecursive(root, predicate, 0)
+    }
+
+    private fun findNodeRecursive(
+        node: android.view.accessibility.AccessibilityNodeInfo,
+        predicate: (android.view.accessibility.AccessibilityNodeInfo) -> Boolean,
+        depth: Int
+    ): android.view.accessibility.AccessibilityNodeInfo? {
+        if (depth > 40) return null
+        try {
+            if (predicate(node)) return node
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                findNodeRecursive(child, predicate, depth + 1)?.let { return it }
+            }
+        } catch (e: Exception) {
+            // Silent fail
+        }
+        return null
+    }
+
+    /** Find the rating star with the given value on the Play Store page. */
+    fun findStarNode(stars: Int): android.view.accessibility.AccessibilityNodeInfo? {
+        val labels = listOf(
+            "rate $stars star", "rate $stars stars", "$stars star",
+            "beri rating $stars bintang", "$stars bintang", "rating $stars"
+        )
+        return findNode { node ->
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+            val text = node.text?.toString()?.lowercase() ?: ""
+            node.isClickable && labels.any { desc.contains(it) || text.contains(it) }
+        }
+    }
+
+    /** Find the review text field (EditText) in the composer. */
+    private fun findEditText(): android.view.accessibility.AccessibilityNodeInfo? = findNode { node ->
+        val cls = node.className?.toString() ?: ""
+        node.isEditable || cls.contains("EditText")
+    }
+
+    /** Find the Post/Submit button in the review composer. */
+    fun findPostButton(): android.view.accessibility.AccessibilityNodeInfo? {
+        val labels = listOf("post", "submit", "kirim", "send", "selesai")
+        return findNode { node ->
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+            val text = node.text?.toString()?.lowercase() ?: ""
+            node.isClickable && labels.any { desc == it || text == it || desc.contains(it) || text.contains(it) }
+        }
+    }
+
+    /** Set text on an editable node via ACTION_SET_TEXT. */
+    fun setTextOnNode(node: android.view.accessibility.AccessibilityNodeInfo, text: String): Boolean {
+        return try {
+            val args = android.os.Bundle().apply {
+                putCharSequence(
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                    text
+                )
+            }
+            node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        } catch (e: Exception) {
+            Log.e(TAG, "setTextOnNode failed", e)
+            false
+        }
+    }
+
+    /** Click a node semantically, falling back to a gesture at its center. */
+    private fun clickNode(node: android.view.accessibility.AccessibilityNodeInfo): Boolean {
+        if (node.isClickable &&
+            node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+        ) {
+            return true
+        }
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        return performClick(bounds.centerX().toFloat(), bounds.centerY().toFloat())
+    }
+
+    /** Poll for a node until found or [timeoutMs] elapses. */
+    private suspend fun awaitNode(
+        timeoutMs: Long,
+        finder: () -> android.view.accessibility.AccessibilityNodeInfo?
+    ): android.view.accessibility.AccessibilityNodeInfo? {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            finder()?.let { return it }
+            delay(200)
+        }
+        return null
+    }
+
+    /**
+     * T4: Perform the full rating flow on the currently visible Play Store page:
+     * reveal the rating section, tap the star, type the review, press Post.
+     * Returns false (without crashing) if any step times out.
+     */
+    suspend fun performRatingOnCurrentScreen(stars: Int, reviewText: String): Boolean {
+        return try {
+            // The "Rate this app" section usually sits below the fold.
+            scrollDown()
+            delay(700)
+
+            val star = awaitNode(RATING_STEP_TIMEOUT) { findStarNode(stars) }
+            if (star == null) {
+                Log.w(TAG, "⭐ Rating: star node ($stars) not found")
+                return false
+            }
+            clickNode(star)
+            delay(900)
+
+            val edit = awaitNode(RATING_STEP_TIMEOUT) { findEditText() }
+            if (edit != null && reviewText.isNotBlank()) {
+                setTextOnNode(edit, reviewText)
+                delay(500)
+            } else {
+                Log.w(TAG, "📝 Rating: review field not found, posting without text")
+            }
+
+            val post = awaitNode(RATING_STEP_TIMEOUT) { findPostButton() }
+            if (post == null) {
+                Log.w(TAG, "📮 Rating: Post button not found")
+                return false
+            }
+            clickNode(post)
+            delay(600)
+            Log.d(TAG, "✅ Rating submitted ($stars stars)")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "performRatingOnCurrentScreen failed", e)
+            false
+        }
+    }
+
     /**
      * Press back button
      */
