@@ -79,7 +79,10 @@ class AutomationForegroundService : Service() {
             automationManager.automationState.collectLatest { state ->
                 when (state) {
                     is AutomationManager.AutomationState.Running -> {
-                        val progress = ((state.currentApp.durationMillis - state.remainingTimeMillis) * 100 / state.currentApp.durationMillis).toInt()
+                        val progress = com.appautomation.util.computeProgress(
+                            state.currentApp.durationMillis,
+                            state.remainingTimeMillis
+                        )
                         val timeStr = formatTime(state.remainingTimeMillis)
                         val elapsedStr = formatTime(state.elapsedTimeMillis)
                         val notification = createNotification(
