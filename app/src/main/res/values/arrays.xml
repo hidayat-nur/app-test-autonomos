@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Positive review templates used by the auto-rating feature.
+         Picked at random (non-repeating) by ReviewPicker. -->
+    <string-array name="review_templates">
+        <item>Aplikasi yang sangat bagus dan membantu, recommended!</item>
+        <item>Mantap, mudah digunakan dan tidak ribet. Terima kasih.</item>
+        <item>Sangat berguna untuk kebutuhan sehari-hari. Lanjutkan!</item>
+        <item>UI-nya bersih dan nyaman dipakai. Saya suka.</item>
+        <item>Fitur lengkap dan jalan lancar tanpa kendala. Top!</item>
+        <item>Aplikasi keren, ringan, dan cepat. Recommended banget.</item>
+        <item>Membantu pekerjaan saya jadi lebih praktis. Bagus sekali.</item>
+        <item>Stabil dan jarang error. Pelayanan update juga oke.</item>
+        <item>Desainnya modern dan fungsinya bekerja dengan baik.</item>
+        <item>Puas pakai aplikasi ini, semoga makin sukses ke depannya.</item>
+    </string-array>
+</resources>
