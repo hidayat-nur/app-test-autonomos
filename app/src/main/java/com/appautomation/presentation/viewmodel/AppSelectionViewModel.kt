@@ -361,6 +361,8 @@ class AppSelectionViewModel @Inject constructor(
                 // Small delay between uninstalls to allow system dialog to appear
                 kotlinx.coroutines.delay(500)
             }
+            // Chime once all uninstall dialogs have been dispatched.
+            com.appautomation.util.SoundPlayer.playSuccess(context)
         }
     }
     

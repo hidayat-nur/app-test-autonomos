@@ -7,6 +7,7 @@ import com.appautomation.data.model.AppTask
 import com.appautomation.data.model.AutomationLog
 import com.appautomation.data.repository.AppRepository
 import com.appautomation.util.ReviewPicker
+import com.appautomation.util.SoundPlayer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -235,6 +236,7 @@ class AutomationManager @Inject constructor(
         
         if (isActive) {
             _automationState.value = AutomationState.Completed(completedCount, totalCount)
+            SoundPlayer.playSuccess(context)
             Log.d(TAG, "Automation completed: $completedCount/$totalCount apps")
 
             // NOTE: Do NOT send user to Home here. Keep app in control so Foreground
@@ -410,6 +412,7 @@ class AutomationManager @Inject constructor(
 
         if (isActive) {
             _automationState.value = AutomationState.RatingCompleted(completed, total)
+            SoundPlayer.playSuccess(context)
             Log.d(TAG, "Rating completed: $completed/$total apps")
         }
     }
