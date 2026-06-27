@@ -237,11 +237,15 @@ class AutomationAccessibilityService : AccessibilityService() {
         Log.d(TAG, "📱 Target package: $targetPackage")
         Log.d(TAG, "📱 Service instance: ${if (instance != null) "ACTIVE" else "NULL"}")
         
-        gestureJob = serviceScope.launch {
+        // B4: run the gesture loop (which walks the accessibility tree recursively)
+        // on a background dispatcher so the main looper stays free. The underlying
+        // AccessibilityService calls (rootInActiveWindow, dispatchGesture,
+        // performGlobalAction) are safe to invoke from any thread.
+        gestureJob = serviceScope.launch(Dispatchers.Default) {
             // First gesture immediately
             Log.d(TAG, "🔥 Performing FIRST gesture NOW...")
             performRandomGesture()
-            
+
             // Then loop with interval
             while (isActive) {
                 delay(intervalMillis)
@@ -438,36 +442,31 @@ class AutomationAccessibilityService : AccessibilityService() {
             findBottomElements(rootNode, bottomNodes, screenHeight)
             
             if (bottomNodes.isEmpty()) {
-                rootNode.recycle()
                 return false
             }
-            
+
             // Filter for likely navigation items
             val navNodes = bottomNodes.filter { node ->
                 val className = node.className?.toString() ?: ""
                 val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-                
-                className.contains("Tab") || 
+
+                className.contains("Tab") ||
                 className.contains("BottomNavigationItemView") ||
                 desc.contains("tab") || desc.contains("navigation")
             }
-            
+
             val targetNode = (if (navNodes.isNotEmpty()) navNodes else bottomNodes).randomOrNull()
-            
+
             if (targetNode != null) {
                 val bounds = Rect()
                 targetNode.getBoundsInScreen(bounds)
                 val text = targetNode.text?.toString() ?: targetNode.contentDescription?.toString() ?: "Nav"
                 Log.d(TAG, "📱 Bottom nav: '$text'")
-                
-                bottomNodes.forEach { it.recycle() }
-                rootNode.recycle()
-                
+
+                // B5: do not recycle() manually — nodes overlap with the root tree and
+                // double-recycling throws IllegalStateException on API < 33. GC handles cleanup.
                 return performClick(bounds.centerX().toFloat(), bounds.centerY().toFloat())
             }
-            
-            bottomNodes.forEach { it.recycle() }
-            rootNode.recycle()
         } catch (e: Exception) {
             Log.e(TAG, "Error clicking bottom nav", e)
         }
@@ -485,24 +484,18 @@ class AutomationAccessibilityService : AccessibilityService() {
             findFabElements(rootNode, fabNodes)
             
             if (fabNodes.isEmpty()) {
-                rootNode.recycle()
                 return false
             }
-            
+
             val fabNode = fabNodes.firstOrNull()
             if (fabNode != null) {
                 val bounds = Rect()
                 fabNode.getBoundsInScreen(bounds)
                 Log.d(TAG, "🔘 FAB found at (${bounds.centerX()}, ${bounds.centerY()})")
-                
-                fabNodes.forEach { it.recycle() }
-                rootNode.recycle()
-                
+
+                // B5: no manual recycle() — see clickBottomNavigation.
                 return performClick(bounds.centerX().toFloat(), bounds.centerY().toFloat())
             }
-            
-            fabNodes.forEach { it.recycle() }
-            rootNode.recycle()
         } catch (e: Exception) {
             Log.e(TAG, "Error clicking FAB", e)
         }
@@ -521,36 +514,30 @@ class AutomationAccessibilityService : AccessibilityService() {
             findTopElements(rootNode, toolbarNodes, screenHeight)
             
             if (toolbarNodes.isEmpty()) {
-                rootNode.recycle()
                 return false
             }
-            
+
             // Filter out back/close buttons, prefer action buttons
             val actionNodes = toolbarNodes.filter { node ->
                 val text = node.text?.toString()?.lowercase() ?: ""
                 val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-                
-                !text.contains("back") && !text.contains("close") && 
+
+                !text.contains("back") && !text.contains("close") &&
                 !desc.contains("back") && !desc.contains("navigate up") &&
                 !desc.contains("close")
             }
-            
+
             val targetNode = (if (actionNodes.isNotEmpty()) actionNodes else toolbarNodes).randomOrNull()
-            
+
             if (targetNode != null) {
                 val bounds = Rect()
                 targetNode.getBoundsInScreen(bounds)
                 val text = targetNode.text?.toString() ?: targetNode.contentDescription?.toString() ?: "Action"
                 Log.d(TAG, "🔝 Toolbar: '$text'")
-                
-                toolbarNodes.forEach { it.recycle() }
-                rootNode.recycle()
-                
+
+                // B5: no manual recycle() — see clickBottomNavigation.
                 return performClick(bounds.centerX().toFloat(), bounds.centerY().toFloat())
             }
-            
-            toolbarNodes.forEach { it.recycle() }
-            rootNode.recycle()
         } catch (e: Exception) {
             Log.e(TAG, "Error clicking toolbar", e)
         }
@@ -656,7 +643,6 @@ class AutomationAccessibilityService : AccessibilityService() {
             
             if (clickableNodes.isEmpty()) {
                 Log.d(TAG, "⚠️ No clickable elements found")
-                rootNode.recycle()
                 return false
             }
             
@@ -675,28 +661,23 @@ class AutomationAccessibilityService : AccessibilityService() {
             }
             
             val targetNodes = if (safeNodes.isNotEmpty()) safeNodes else clickableNodes.take(10)
-            
+
             if (targetNodes.isEmpty()) {
-                clickableNodes.forEach { it.recycle() }
-                rootNode.recycle()
                 return false
             }
-            
+
             // Pick random element and click it
             val randomNode = targetNodes.random()
             val bounds = Rect()
             randomNode.getBoundsInScreen(bounds)
-            
+
             val centerX = bounds.centerX().toFloat()
             val centerY = bounds.centerY().toFloat()
-            
+
             val text = randomNode.text?.toString() ?: randomNode.contentDescription?.toString() ?: "Unknown"
             Log.d(TAG, "🎯 Clicking UI: '$text' at ($centerX, $centerY)")
-            
-            // Cleanup
-            clickableNodes.forEach { it.recycle() }
-            rootNode.recycle()
-            
+
+            // B5: no manual recycle() — see clickBottomNavigation.
             return performClick(centerX, centerY)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error finding clickable: ${e.message}")
