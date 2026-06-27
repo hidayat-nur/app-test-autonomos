@@ -175,6 +175,9 @@ class AutomationForegroundService : Service() {
     
     private fun acquireWakeLock() {
         try {
+            // B6: release any previously held lock before acquiring a new one so a
+            // service restart (START_STICKY) can't leak a 10-hour PARTIAL_WAKE_LOCK.
+            releaseWakeLock()
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,

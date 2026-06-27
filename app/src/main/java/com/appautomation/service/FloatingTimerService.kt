@@ -243,5 +243,8 @@ class FloatingTimerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         hideFloatingBubble()
+        // B3: cancel the scope so the state collector stops and releases its
+        // references to the timer views (otherwise it leaks on every show/hide).
+        serviceScope.cancel()
     }
 }

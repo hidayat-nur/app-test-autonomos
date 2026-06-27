@@ -36,7 +36,7 @@ class AutomationManager @Inject constructor(
             val totalCount: Int
         ) : AutomationState()
         object Paused : AutomationState()
-        data class Completed(val totalApps: Int) : AutomationState()
+        data class Completed(val completedCount: Int, val totalCount: Int) : AutomationState()
         data class Error(val message: String) : AutomationState()
     }
     
@@ -216,7 +216,7 @@ class AutomationManager @Inject constructor(
         }
         
         if (isActive) {
-            _automationState.value = AutomationState.Completed(completedCount)
+            _automationState.value = AutomationState.Completed(completedCount, totalCount)
             Log.d(TAG, "Automation completed: $completedCount/$totalCount apps")
 
             // NOTE: Do NOT send user to Home here. Keep app in control so Foreground

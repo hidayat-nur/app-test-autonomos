@@ -87,7 +87,8 @@ fun MonitoringScreen(
                 
                 is AutomationManager.AutomationState.Completed -> {
                     CompletedStateContent(
-                        totalApps = currentState.totalApps,
+                        completedCount = currentState.completedCount,
+                        totalCount = currentState.totalCount,
                         onDismiss = {
                             // Do not stop the foreground service automatically; keep the app
                             // open so the user can start the next batch. Navigate back to
@@ -366,7 +367,8 @@ fun PausedStateContent(
 
 @Composable
 fun CompletedStateContent(
-    totalApps: Int,
+    completedCount: Int,
+    totalCount: Int,
     onDismiss: () -> Unit
 ) {
     Column(
@@ -390,7 +392,7 @@ fun CompletedStateContent(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "Successfully automated $totalApps apps",
+            "Successfully automated $completedCount of $totalCount apps",
             style = MaterialTheme.typography.bodyLarge
         )
         Spacer(modifier = Modifier.height(40.dp))
