@@ -16,6 +16,31 @@ class AppLauncher @Inject constructor(
     
     companion object {
         private const val TAG = "AppLauncher"
+
+        /**
+         * Package prefixes for OEM/system/vendor apps. On some devices (e.g.
+         * Samsung) preinstalled apps are stored in /data WITHOUT the SYSTEM flag,
+         * so flag checks alone miss them — we also hide these by package name.
+         */
+        private val SYSTEM_PACKAGE_PREFIXES = listOf(
+            "com.android.",
+            "com.google.",
+            "com.samsung.",
+            "com.sec.",
+            "com.sec.android.",
+            "com.microsoft.",
+            "com.qualcomm.",
+            "com.knox",
+            "com.skms.",
+            "com.wssyncmldm",
+            "com.monotype.",
+            "com.diotek.",
+            "com.dsi.ant"
+        )
+
+        private fun isVendorPackage(packageName: String): Boolean =
+            packageName == "android" ||
+            SYSTEM_PACKAGE_PREFIXES.any { packageName.startsWith(it) }
     }
     
     /**
@@ -62,7 +87,12 @@ class AppLauncher @Inject constructor(
                         }
                         
                         val appInfo = packageManager.getApplicationInfo(packageName, 0)
-                        val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                        // Treat an app as "system" if it carries either system flag
+                        // OR matches a known vendor prefix (covers Samsung/Google
+                        // preinstalled apps that ship without the SYSTEM flag).
+                        val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0 ||
+                            (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0 ||
+                            isVendorPackage(packageName)
                         
                         // Get install time
                         val packageInfo = try {
