@@ -5,9 +5,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.appautomation.data.model.AppTask
 import com.appautomation.data.model.DailyTask
 import com.appautomation.data.model.TaskType
 import com.appautomation.data.repository.DailyTaskRepository
+import com.appautomation.service.AutomationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,8 +25,27 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DailyTaskViewModel @Inject constructor(
-    private val repository: DailyTaskRepository
+    private val repository: DailyTaskRepository,
+    private val automationManager: AutomationManager
 ) : ViewModel() {
+
+    /**
+     * Rate all RATE_APP tasks for the selected date one-by-one on the Play Store
+     * (open page -> fill review -> 5 stars -> back -> next). Returns false if the
+     * list is empty.
+     */
+    fun startRatingAll(rateApps: List<DailyTask>): Boolean {
+        if (rateApps.isEmpty()) return false
+        val tasks = rateApps.map { task ->
+            AppTask(
+                packageName = task.packageName,
+                appName = task.appName,
+                durationMillis = 0L
+            )
+        }
+        automationManager.startRatingAll(tasks)
+        return true
+    }
 
     // Selected date in format yyyy-MM-dd (default today)
     private val _selectedDate = MutableStateFlow(getToday())

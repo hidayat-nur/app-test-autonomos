@@ -1,6 +1,10 @@
 package com.appautomation.presentation.ui.screens
 
 import android.content.Intent
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Star
+import com.appautomation.service.AutomationAccessibilityService
+import com.appautomation.service.AutomationForegroundService
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -71,7 +75,8 @@ fun isAppInstalled(packageManager: PackageManager, packageName: String): Boolean
 @Composable
 fun DailyTaskScreen(
     viewModel: DailyTaskViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToMonitoring: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -283,6 +288,31 @@ fun DailyTaskScreen(
                 if (rateApps.isNotEmpty()) {
                     item {
                         SectionHeader("Rating App")
+                    }
+                    item {
+                        // Rate ALL apps in this list automatically, one by one.
+                        Button(
+                            onClick = {
+                                if (!AutomationAccessibilityService.isServiceEnabled()) {
+                                    Toast.makeText(
+                                        context,
+                                        "Aktifkan Accessibility Service terlebih dahulu",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else if (viewModel.startRatingAll(rateApps)) {
+                                    val intent = Intent(context, AutomationForegroundService::class.java)
+                                    context.startForegroundService(intent)
+                                    onNavigateToMonitoring()
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Star, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Rating Semua (${rateApps.size})")
+                        }
                     }
                     items(rateApps) { task ->
                         RateTaskItem(task) {

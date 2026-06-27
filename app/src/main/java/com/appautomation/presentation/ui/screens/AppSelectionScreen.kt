@@ -24,8 +24,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.appautomation.data.model.AppInfo
 import com.appautomation.data.model.AppSortOption
 import com.appautomation.presentation.viewmodel.AppSelectionViewModel
-import android.widget.Toast
-import com.appautomation.service.AutomationAccessibilityService
 import com.appautomation.service.AutomationForegroundService
 import com.appautomation.util.Constants
 import androidx.compose.material.icons.filled.List
@@ -125,22 +123,6 @@ fun AppSelectionScreen(
                         )
                     }
                     if (selectedApps.isNotEmpty()) {
-                        // Rating all selected apps button (T7)
-                        IconButton(onClick = {
-                            if (!AutomationAccessibilityService.isServiceEnabled()) {
-                                Toast.makeText(
-                                    context,
-                                    "Aktifkan Accessibility Service terlebih dahulu",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            } else if (viewModel.startRatingAll()) {
-                                val intent = Intent(context, AutomationForegroundService::class.java)
-                                context.startForegroundService(intent)
-                                onNavigateToMonitoring()
-                            }
-                        }) {
-                            Icon(Icons.Default.Star, "Rating semua app")
-                        }
                         // Uninstall button
                         IconButton(onClick = { showUninstallConfirmDialog = true }) {
                             Icon(Icons.Default.Delete, "Uninstall selected apps")

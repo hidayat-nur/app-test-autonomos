@@ -400,6 +400,9 @@ class AutomationManager @Inject constructor(
             )
             if (success) completed++
 
+            // Leave the Play Store page before moving to the next app.
+            AutomationAccessibilityService.getInstance()?.pressBack()
+
             if (index < apps.size - 1 && isActive) {
                 delay(RATING_GAP_DELAY)
             }

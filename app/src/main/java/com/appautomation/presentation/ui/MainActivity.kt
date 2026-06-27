@@ -108,6 +108,9 @@ fun MainNavigation() {
             DailyTaskScreen(
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onNavigateToMonitoring = {
+                    navController.navigate("monitoring")
                 }
             )
         }
