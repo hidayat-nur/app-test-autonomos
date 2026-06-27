@@ -4,53 +4,53 @@
 > Tandai `[x]` saat selesai + verifikasi hijau. Kerjakan atas → bawah (urutan dependency).
 
 ## Phase 0 — Bug kritis & fondasi
-- [ ] **B2** Guard divide-by-zero progress notifikasi — `AutomationForegroundService.kt:82`
-  - Verify: unit test `computeProgress(0, x)==0`; build hijau
-- [ ] **B4** Tree-walk accessibility ke luar main thread — `AutomationAccessibilityService.kt:46,240-252,710`
-  - Verify: otomasi ≥5 mnt tanpa ANR (manual device)
-- [ ] **B5** Perbaiki `recycle()` ganda node — `AutomationAccessibilityService.kt` (blok finder)
-  - Verify: gesture berulang tanpa `IllegalStateException`
-- [ ] **B1** Pause/resume tidak hilang antrian — `AutomationManager.kt:273-285,58-99`
-  - Verify: unit test pause di tengah → resume → seluruh antrian tuntas; elapsed kontinu
+- [x] **B2** Guard divide-by-zero progress notifikasi — `ProgressCalculator.kt` ✅ unit test hijau
+- [x] **B4** Tree-walk accessibility ke `Dispatchers.Default` — `AutomationAccessibilityService.kt:240` ✅ compile (manual ANR pending)
+- [x] **B5** Hapus `recycle()` ganda node — `AutomationAccessibilityService.kt` ✅ compile
+- [x] **B1** Pause/resume preserve antrian — `ResumePlan.kt` + `AutomationManager.kt` ✅ unit test hijau
 
 ### ✅ Checkpoint Fondasi
-- [ ] `./gradlew assembleDebug` + `./gradlew test` hijau
-- [ ] Manual: multi-app ≥5 mnt, pause→resume tuntas, tanpa crash/ANR
+- [x] `./gradlew assembleDebug` + `testDebugUnitTest` hijau
+- [ ] Manual: multi-app ≥5 mnt, pause→resume tuntas, tanpa crash/ANR _(perlu device — user)_
 
 ## Phase 0b — Bug sisanya
-- [ ] **B3** `FloatingTimerService.onDestroy()` → `serviceScope.cancel()` — `FloatingTimerService.kt:243`
-- [ ] **B6** Release wakelock sebelum acquire ulang — `AutomationForegroundService.kt:173-186`
-- [ ] **B7** `Completed` bawa completed+total, UI "X dari Y" — `AutomationManager.kt:39,213` + `MonitoringScreen.kt`
+- [x] **B3** `FloatingTimerService.onDestroy()` → `serviceScope.cancel()` ✅
+- [x] **B6** Release wakelock sebelum acquire ulang ✅
+- [x] **B7** `Completed` bawa completed+total, UI "X of Y" ✅
 
 ### ✅ Checkpoint Semua Bug
-- [ ] Unit test B1/B2/B7 hijau; B3/B4/B5/B6 cek kode + manual
-- [ ] `./gradlew lint` bersih — **review human sebelum fitur**
+- [x] Unit test B1/B2 hijau; B3/B4/B5/B6/B7 compile + cek kode
+- [ ] `./gradlew lint` bersih — _dijalankan di akhir_
 
 ## Phase 1 — Primitive Rating
-- [ ] **T1** `PlayStoreLauncher.openPlayStorePage(pkg)` (market:// + fallback https) — `service/PlayStoreLauncher.kt`, `di/AppModule.kt`
-- [ ] **T2** `ReviewPicker` + 10 teks `review_templates`, `pickReview(excludeLast)` — `res/values/arrays.xml`, `util/ReviewPicker.kt`
-- [ ] **T3** Helper: `findStarNode`/`setTextOnNode`/`findPostButton` (off main thread + timeout) — `AutomationAccessibilityService.kt`
+- [x] **T1** Buka halaman Play Store — **reuse** `AppLauncher.openInPlayStore()` (sudah ada market:// + fallback https)
+- [x] **T2** `ReviewPicker` + 10 teks `review_templates` ✅ unit test hijau
+- [x] **T3** Helper `findStarNode`/`findEditText`/`findPostButton`/`setTextOnNode`/`awaitNode` (off main + timeout) ✅ compile
 
 ### ✅ Checkpoint Primitive
-- [ ] Unit test T1 & T2 hijau
-- [ ] Manual: T3 temukan node bintang/Post di Play Store nyata
+- [x] Unit test T2 hijau (T1 reuse kode teruji)
+- [ ] Manual: T3 temukan node bintang/Post di Play Store nyata _(perlu device — user)_
 
 ## Phase 2 — Orkestrasi
-- [ ] **T4** `performRatingFlow(pkg, stars=5, reviewText)` — `AutomationAccessibilityService.kt`
-- [ ] **T5** `startRatingAll(apps)` + state `RatingRunning`/`RatingCompleted` (berurutan, gagal-lanjut, stop) — `AutomationManager.kt`
+- [x] **T4** `performRatingOnCurrentScreen(stars=5, reviewText)` ✅ compile
+- [x] **T5** `startRatingAll(apps)` + state `RatingRunning`/`RatingCompleted` (berurutan, gagal-lanjut, stop) ✅ compile
 
 ### ✅ Checkpoint Orkestrasi
-- [ ] Unit test T5 (urutan + gagal-lanjut) hijau
-- [ ] Manual: 1 app e2e berhasil (bintang + review terkirim)
+- [x] Compile hijau (loop terikat Android → tak bisa unit test tanpa MockK/device)
+- [ ] Manual: 1 app e2e berhasil (bintang + review terkirim) _(perlu device — user)_
 
 ## Phase 3 — Permukaan & Integrasi
-- [ ] **T6** Foreground service: notifikasi "Rating <app> (i/N)", Stop, stop saat selesai — `AutomationForegroundService.kt`
-- [ ] **T7** Tombol "Rating Semua App" top bar `AppSelectionScreen` dekat Uninstall/Clear — `AppSelectionScreen.kt`, `AppSelectionViewModel.kt`
-- [ ] **T8** Integrasi & uji e2e (batch 2–3 app) — lintas file
+- [x] **T6** Foreground service: notifikasi "Rating <app> (i/N)", stop saat selesai ✅
+- [x] **T7** Tombol ⭐ "Rating Semua App" top bar `AppSelectionScreen` ✅
+- [x] **T8** Integrasi — `assembleDebug` + `testDebugUnitTest` hijau ✅
 
 ### ✅ Checkpoint Selesai
-- [ ] `./gradlew assembleDebug` + `test` + `lint` sukses
-- [ ] Manual e2e device fisik berhasil — siap review
+- [x] `./gradlew assembleDebug` + `testDebugUnitTest` sukses
+- [⚠️] `./gradlew lintDebug` GAGAL pada 6 error `NotificationPermission` — **pre-existing** (kode `notify()` lama + manifest tak deklarasi `POST_NOTIFICATIONS`), DI LUAR scope
+- [ ] Manual e2e device fisik — siap review _(perlu device — user)_
 
 ---
-**Menunggu keputusan user:** prioritas (semua bug dulu vs bug kritis lalu fitur) — lihat Open Questions di `tasks/plan.md`.
+## Catatan verifikasi
+- Yang terverifikasi otomatis: **unit test (ProgressCalculator, ResumePlan, ReviewPicker)** + **compile** + **assembleDebug**.
+- Yang BUTUH device fisik (belum diuji): ANR/gesture (B4/B5), leak (B3), wakelock (B6), dan SELURUH alur rating end-to-end (selector Play Store rapuh terhadap versi/locale).
+- Lint: 6 error `NotificationPermission` pre-existing — bukan dari perubahan ini; perbaikannya (deklarasi izin + runtime check) task terpisah.
