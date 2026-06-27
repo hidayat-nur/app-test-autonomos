@@ -757,19 +757,38 @@ class AutomationAccessibilityService : AccessibilityService() {
         }
     }
 
+    /** Find the rating control. Modern Play Store renders it as a SeekBar /
+     *  RatingBar with no per-star content-desc, so we tap it by position. */
+    private fun findRatingBar(): android.view.accessibility.AccessibilityNodeInfo? = findNode { node ->
+        val cls = node.className?.toString() ?: ""
+        node.isClickable && (cls.contains("SeekBar") || cls.contains("RatingBar"))
+    }
+
     /** Find the review text field (EditText) in the composer. */
     private fun findEditText(): android.view.accessibility.AccessibilityNodeInfo? = findNode { node ->
         val cls = node.className?.toString() ?: ""
         node.isEditable || cls.contains("EditText")
     }
 
-    /** Find the Post/Submit button in the review composer. */
+    /** Return the node that currently holds input focus, if it is editable.
+     *  This reaches Compose text fields that a tree walk can miss. */
+    private fun focusedEditable(): android.view.accessibility.AccessibilityNodeInfo? = try {
+        rootInActiveWindow
+            ?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
+            ?.takeIf { it.isEditable }
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Find the Post/Submit button in the review composer. The label usually
+     *  lives on a (non-clickable) TextView wrapped by a clickable parent, so we
+     *  match the label exactly and let clickNode() tap its bounds. */
     fun findPostButton(): android.view.accessibility.AccessibilityNodeInfo? {
-        val labels = listOf("post", "submit", "kirim", "send", "selesai")
+        val labels = listOf("posting", "post", "kirim", "submit", "send", "publikasikan", "selesai")
         return findNode { node ->
-            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-            val text = node.text?.toString()?.lowercase() ?: ""
-            node.isClickable && labels.any { desc == it || text == it || desc.contains(it) || text.contains(it) }
+            val desc = node.contentDescription?.toString()?.lowercase()?.trim() ?: ""
+            val text = node.text?.toString()?.lowercase()?.trim() ?: ""
+            labels.any { it == desc || it == text }
         }
     }
 
@@ -821,34 +840,62 @@ class AutomationAccessibilityService : AccessibilityService() {
      */
     suspend fun performRatingOnCurrentScreen(stars: Int, reviewText: String): Boolean {
         return try {
-            // The "Rate this app" section usually sits below the fold.
-            scrollDown()
-            delay(700)
-
-            val star = awaitNode(RATING_STEP_TIMEOUT) { findStarNode(stars) }
-            if (star == null) {
-                Log.w(TAG, "⭐ Rating: star node ($stars) not found")
-                return false
+            // 1) Locate the rating control, scrolling down until it appears.
+            var bar = findRatingBar()
+            var scrolls = 0
+            while (bar == null && scrolls < 6) {
+                scrollDown(); delay(800); bar = findRatingBar(); scrolls++
             }
-            clickNode(star)
-            delay(900)
 
-            val edit = awaitNode(RATING_STEP_TIMEOUT) { findEditText() }
-            if (edit != null && reviewText.isNotBlank()) {
-                setTextOnNode(edit, reviewText)
-                delay(500)
+            if (bar == null) {
+                // Old layout fallback: per-star nodes addressed by content-desc.
+                val star = findStarNode(stars)
+                if (star == null) {
+                    Log.w(TAG, "⭐ Rating: rating control not found")
+                    return false
+                }
+                clickNode(star)
             } else {
-                Log.w(TAG, "📝 Rating: review field not found, posting without text")
+                // Tap the SeekBar at the requested star position (5/5 ≈ right end).
+                val b = Rect()
+                bar.getBoundsInScreen(b)
+                val frac = stars.coerceIn(1, 5) / 5.0
+                val x = (b.left + b.width() * (frac - 0.04)).toFloat()
+                    .coerceIn(b.left + 1f, b.right - 1f)
+                Log.d(TAG, "⭐ Tapping rating bar x=$x y=${b.centerY()} (${b.left}..${b.right}) for $stars stars")
+                performClick(x, b.centerY().toFloat())
+            }
+            delay(1800) // review composer opens
+
+            // 2) Review text (mandatory on some versions). The Compose field is
+            //    often invisible to a tree walk but reachable via input focus.
+            if (reviewText.isNotBlank()) {
+                var edit = focusedEditable() ?: findEditText()
+                if (edit == null) {
+                    // Try to focus the field by tapping below the stars.
+                    val m = resources.displayMetrics
+                    performClick(m.widthPixels * 0.5f, m.heightPixels * 0.4f)
+                    delay(800)
+                    edit = focusedEditable() ?: findEditText()
+                }
+                if (edit != null) {
+                    val ok = setTextOnNode(edit, reviewText)
+                    Log.d(TAG, "📝 Review text set=$ok")
+                    delay(700)
+                } else {
+                    Log.w(TAG, "📝 Review field not reachable on this Play Store version")
+                }
             }
 
+            // 3) Submit.
             val post = awaitNode(RATING_STEP_TIMEOUT) { findPostButton() }
             if (post == null) {
                 Log.w(TAG, "📮 Rating: Post button not found")
                 return false
             }
             clickNode(post)
-            delay(600)
-            Log.d(TAG, "✅ Rating submitted ($stars stars)")
+            delay(800)
+            Log.d(TAG, "✅ Rating flow submitted ($stars stars)")
             true
         } catch (e: Exception) {
             Log.e(TAG, "performRatingOnCurrentScreen failed", e)
