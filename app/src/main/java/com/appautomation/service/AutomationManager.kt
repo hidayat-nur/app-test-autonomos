@@ -83,7 +83,9 @@ class AutomationManager @Inject constructor(
             return
         }
         
-        stopAutomation() // Stop any existing automation
+        // Reset flags/interactions WITHOUT nulling automationJob — launchRun joins
+        // the previous job so its terminal state write can't stomp the new run.
+        resetForNewRun()
 
         // Fresh run: start counts at zero, full app list, new session clock.
         launchRun(apps, startCompletedCount = 0, totalCount = apps.size, sessionStart = System.currentTimeMillis())
@@ -94,7 +96,12 @@ class AutomationManager @Inject constructor(
      * the difference is purely in the counts/session-clock passed in.
      */
     private fun launchRun(apps: List<AppTask>, startCompletedCount: Int, totalCount: Int, sessionStart: Long) {
+        val previous = automationJob
         automationJob = automationScope.launch {
+            // Wait for any prior run to fully finish (incl. its catch/finally that may
+            // set Idle) BEFORE we run, so stale terminal writes cannot overwrite the
+            // fresh Running/RatingRunning state.
+            previous?.cancelAndJoin()
             try {
                 runAutomation(apps, startCompletedCount, totalCount, sessionStart)
             } catch (e: CancellationException) {
@@ -310,9 +317,9 @@ class AutomationManager @Inject constructor(
             isPaused = false
             pausedSession = null
 
-            // Cancel any lingering job WITHOUT going through stopAutomation() (which
-            // would wipe the saved session); then relaunch the full remaining queue.
-            automationJob?.cancel()
+            // launchRun joins the lingering (paused) job before starting, so we don't
+            // cancel it here — and we must NOT call stopAutomation() (it would wipe
+            // the saved session). Relaunch the full remaining queue.
             launchRun(plan.apps, plan.startCompletedCount, plan.totalCount, plan.sessionStartTime)
 
             Log.d(TAG, "Automation resumed with ${plan.apps.size} app(s) remaining")
@@ -330,7 +337,7 @@ class AutomationManager @Inject constructor(
             return
         }
 
-        stopAutomation() // cancel anything in flight
+        resetForNewRun() // reset flags/interactions; launchRun-style join below
 
         val templates = try {
             context.resources.getStringArray(R.array.review_templates).toList()
@@ -339,7 +346,9 @@ class AutomationManager @Inject constructor(
             emptyList()
         }
 
+        val previous = automationJob
         automationJob = automationScope.launch {
+            previous?.cancelAndJoin()
             try {
                 runRating(apps, templates)
             } catch (e: CancellationException) {
@@ -418,6 +427,17 @@ class AutomationManager @Inject constructor(
     }
 
     /**
+     * Reset run flags and stop live interactions in preparation for a new run,
+     * WITHOUT cancelling/nulling automationJob (launchRun joins it) or forcing the
+     * state to Idle. Used by startAutomation/startRatingAll.
+     */
+    private fun resetForNewRun() {
+        isPaused = false
+        pausedSession = null
+        AutomationAccessibilityService.getInstance()?.stopRandomInteractions()
+    }
+
+    /**
      * Stop automation completely
      */
     fun stopAutomation() {
@@ -436,10 +456,12 @@ class AutomationManager @Inject constructor(
     }
     
     /**
-     * Check if automation is running
+     * Check if a batch is actively running (normal automation OR rating).
+     * Callers use this to avoid starting overlapping work, so it must cover both.
      */
     fun isRunning(): Boolean {
-        return _automationState.value is AutomationState.Running
+        val state = _automationState.value
+        return state is AutomationState.Running || state is AutomationState.RatingRunning
     }
     
     /**
