@@ -33,16 +33,15 @@ fun MonitoringScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Column {
                         Text(
                             "BorderTech",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
+                            style = MaterialTheme.typography.titleLarge
                         )
                         Text(
                             "Automation Monitor",
-                            fontSize = 14.sp,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -213,9 +212,13 @@ fun RunningStateContent(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // Progress bar
+                // Progress bar (guard against zero/!finite duration)
+                val duration = state.currentApp.durationMillis
+                val progress = if (duration > 0L) {
+                    (1f - state.remainingTimeMillis.toFloat() / duration).coerceIn(0f, 1f)
+                } else 0f
                 LinearProgressIndicator(
-                    progress = 1f - (state.remainingTimeMillis.toFloat() / state.currentApp.durationMillis),
+                    progress = progress,
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -253,9 +256,8 @@ fun RunningStateContent(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        "🎮 Random Interactions Active",
+                        "Random Interactions Active",
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     Text(

@@ -54,16 +54,15 @@ fun PermissionsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Column {
                         Text(
                             "BorderTech",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
+                            style = MaterialTheme.typography.titleLarge
                         )
                         Text(
                             "Setup",
-                            fontSize = 14.sp,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -89,26 +88,18 @@ fun PermissionsScreen(
             Spacer(modifier = Modifier.height(24.dp))
             
             Text(
-                "Welcome to BorderTech Automation",
+                "Welcome to BorderTech",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            Text(
-                "App Automation",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Text(
-                "Please grant the following permissions to enable automatic app launching and monitoring",
+                "Grant the following permissions to enable automatic app launching and monitoring.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
             
             Spacer(modifier = Modifier.height(32.dp))
