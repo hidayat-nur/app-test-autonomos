@@ -74,26 +74,25 @@ fun AppSelectionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Column {
                         Text(
                             "BorderTech",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
+                            style = MaterialTheme.typography.titleLarge
                         )
                         Text(
                             "Select Apps",
-                            fontSize = 14.sp,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
                 actions = {
                     IconButton(onClick = { showSettingsMenu = !showSettingsMenu }) {
-                        Icon(Icons.Default.Settings, "Batch Settings")
+                        Icon(Icons.Default.Settings, "Settings")
                     }
                     IconButton(onClick = { onNavigateToDailyTasks() }) {
-                        Icon(Icons.Default.List, "Daily Tasks")
+                        Icon(Icons.Default.Checklist, "Daily Tasks")
                     }
                     DropdownMenu(
                         expanded = showSettingsMenu,
@@ -114,7 +113,8 @@ fun AppSelectionScreen(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("🔄 Refresh apps") },
+                            text = { Text("Refresh apps") },
+                            leadingIcon = { Icon(Icons.Default.Refresh, null) },
                             onClick = {
                                 viewModel.refreshInstalledApps()
                                 showSettingsMenu = false
@@ -134,7 +134,7 @@ fun AppSelectionScreen(
                         }
                     }
                     IconButton(onClick = { viewModel.selectAll() }) {
-                        Icon(Icons.Default.Done, "Select All")
+                        Icon(Icons.Default.DoneAll, "Select All")
                     }
                 }
             )
@@ -169,11 +169,20 @@ fun AppSelectionScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        "📦 $totalBatches Batches Available",
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Layers,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            "$totalBatches Batches Available",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
                                     Icon(
                                         if (showBatchList) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                         "Expand",
@@ -182,7 +191,7 @@ fun AppSelectionScreen(
                                 }
                                 Text(
                                     "${selectedApps.size} apps • $batchSize per batch",
-                                    fontSize = 12.sp,
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                             }
@@ -408,7 +417,6 @@ fun AppSelectionScreen(
                                 viewModel.openAppInPlayStore(app.packageName)
                             }
                         )
-                        Divider()
                     }
                 }
             }
@@ -483,11 +491,20 @@ fun AppSelectionScreen(
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "⚠️ Note: You can only uninstall apps that you installed. System apps and pre-installed apps cannot be uninstalled.",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "You can only uninstall apps that you installed. System and pre-installed apps cannot be removed.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -581,34 +598,39 @@ fun AppSelectionItem(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     app.appName,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
+                    style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 if (isTestedToday) {
                     Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Tested today",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        "✓ Tested",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
+                        "Tested",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
             Text(
                 app.packageName,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        
+
         // Play Store icon button
         IconButton(
             onClick = { onOpenPlayStore() },
             modifier = Modifier.size(40.dp)
         ) {
             Icon(
-                Icons.Default.ShoppingCart,
+                Icons.Default.Shop,
                 contentDescription = "Open in Play Store",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
@@ -694,8 +716,8 @@ fun BatchSizePickerDialog(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "💡 Recommended: 15-25 apps for optimal control",
-                    fontSize = 11.sp,
+                    "Recommended: 15–25 apps for optimal control",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.tertiary
                 )
             }
