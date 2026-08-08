@@ -49,12 +49,16 @@ class AutomationAccessibilityService : AccessibilityService() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var gestureJob: Job? = null
     private var gestureCount = 0
-    private var currentTargetPackage: String? = null
-    private var currentActivePackage: String? = null
-    private var isGesturePaused = false
-    private var lastRelaunchTime = 0L
-    private var relaunchJob: Job? = null
-    private var monitorJob: Job? = null
+
+    // These are read/written from BOTH the Main thread (onAccessibilityEvent,
+    // relaunch coroutines) and the Default thread (the gesture loop). They must be
+    // @Volatile so a write on one thread is observed on the other — otherwise the
+    // pause flag can get "stuck" and gestures keep firing in the wrong app.
+    @Volatile private var currentTargetPackage: String? = null
+    @Volatile private var currentActivePackage: String? = null
+    @Volatile private var isGesturePaused = false
+    @Volatile private var lastRelaunchTime = 0L
+    @Volatile private var relaunchJob: Job? = null
     
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -279,6 +283,31 @@ class AutomationAccessibilityService : AccessibilityService() {
     }
     
     /**
+     * Exit the current (wrong) app and bring the target app back to the front.
+     * Debounced (1s) and single-flighted via [relaunchJob] so the gesture loop —
+     * which ticks every ~500ms — cannot spawn overlapping BACK+relaunch coroutines
+     * (which previously caused a relaunch storm / flicker). Clears the pause flag
+     * once the target is restored.
+     */
+    private fun scheduleExitAndRelaunch(reason: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastRelaunchTime < 1000) return
+        lastRelaunchTime = now
+        relaunchJob?.cancel()
+        relaunchJob = serviceScope.launch {
+            Log.w(TAG, "🔄 Exit+relaunch ($reason) → $currentTargetPackage")
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            delay(500)
+            if (getCurrentPackageName() != currentTargetPackage) {
+                relaunchtargetApp()
+                delay(500)
+            }
+            isGesturePaused = false
+            Log.d(TAG, "▶️ RESUME gestures after $reason")
+        }
+    }
+
+    /**
      * Relaunch target app when user switches away
      */
     private fun relaunchtargetApp() {
@@ -327,34 +356,15 @@ class AutomationAccessibilityService : AccessibilityService() {
         if (currentPkg != null && BROWSER_PACKAGES.contains(currentPkg)) {
             Log.e(TAG, "🚫 GESTURE BLOCKED - Browser detected: $currentPkg")
             isGesturePaused = true
-            // Immediate exit and relaunch
-            serviceScope.launch {
-                performGlobalAction(GLOBAL_ACTION_BACK)
-                delay(200)
-                if (currentTargetPackage != null) {
-                    relaunchtargetApp()
-                    delay(500)
-                    isGesturePaused = false
-                    Log.d(TAG, "▶️ RESUME gestures after browser exit")
-                }
-            }
+            scheduleExitAndRelaunch("browser")
             return
         }
-        
+
         // Block if not in target app
         if (currentPkg != null && currentPkg != currentTargetPackage) {
             Log.w(TAG, "⚠️ GESTURE BLOCKED - Not in target app: $currentPkg vs $currentTargetPackage")
             isGesturePaused = true
-            serviceScope.launch {
-                performGlobalAction(GLOBAL_ACTION_BACK)
-                delay(500)
-                if (getCurrentPackageName() != currentTargetPackage) {
-                    relaunchtargetApp()
-                    delay(500)
-                    isGesturePaused = false
-                    Log.d(TAG, "▶️ RESUME gestures after relaunch")
-                }
-            }
+            scheduleExitAndRelaunch("wrong-app")
             return
         }
         
