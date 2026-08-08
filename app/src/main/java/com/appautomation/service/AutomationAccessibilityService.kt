@@ -47,8 +47,10 @@ class AutomationAccessibilityService : AccessibilityService() {
     }
     
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var gestureJob: Job? = null
-    private var gestureCount = 0
+    // gestureJob is set on Main and its loop runs on Default; gestureCount is
+    // incremented on Default and read on Main — @Volatile keeps them consistent.
+    @Volatile private var gestureJob: Job? = null
+    @Volatile private var gestureCount = 0
 
     // These are read/written from BOTH the Main thread (onAccessibilityEvent,
     // relaunch coroutines) and the Default thread (the gesture loop). They must be
@@ -78,25 +80,10 @@ class AutomationAccessibilityService : AccessibilityService() {
                 if (packageName != null && BROWSER_PACKAGES.contains(packageName)) {
                     Log.e(TAG, "🚫 BROWSER DETECTED: $packageName - BLOCKING NOW!")
                     isGesturePaused = true
-                    
-                    // IMMEDIATE ACTION - Exit browser AND relaunch target app!
-                    serviceScope.launch {
-                        // BACK to exit browser
-                        Log.d(TAG, "⬅️ Pressing BACK to exit browser")
-                        performGlobalAction(GLOBAL_ACTION_BACK)
-                        delay(200)
-                        
-                        // IMMEDIATELY relaunch target app (don't wait to check)
-                        if (currentTargetPackage != null) {
-                            Log.w(TAG, "🔄 RELAUNCH target app: $currentTargetPackage")
-                            relaunchtargetApp()
-                            
-                            // Resume gestures after relaunch
-                            delay(500)
-                            isGesturePaused = false
-                            Log.d(TAG, "▶️ RESUME gestures after relaunch")
-                        }
-                    }
+                    // Route through the shared debounced/single-flighted helper so this
+                    // (Main) path and the gesture loop (Default) can't spawn overlapping
+                    // BACK+relaunch coroutines.
+                    scheduleExitAndRelaunch("browser")
                     return
                 }
                 
@@ -116,24 +103,8 @@ class AutomationAccessibilityService : AccessibilityService() {
                             isGesturePaused = true
                             Log.w(TAG, "⚠️ ESCAPED TO: $packageName")
                         }
-                        
-                        // Debounce relaunch
-                        val now = System.currentTimeMillis()
-                        if (now - lastRelaunchTime > 1000) {
-                            lastRelaunchTime = now
-                            relaunchJob?.cancel()
-                            
-                            relaunchJob = serviceScope.launch {
-                                // Try back button
-                                performGlobalAction(GLOBAL_ACTION_BACK)
-                                delay(800)
-                                
-                                // Force relaunch if needed
-                                if (currentActivePackage != currentTargetPackage) {
-                                    relaunchtargetApp()
-                                }
-                            }
-                        }
+                        // Same shared debounced/single-flighted relaunch as the gesture loop.
+                        scheduleExitAndRelaunch("escaped:$packageName")
                     }
                 }
             }

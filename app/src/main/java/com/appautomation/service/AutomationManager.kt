@@ -65,7 +65,9 @@ class AutomationManager @Inject constructor(
     private var automationJob: Job? = null
     private val automationScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     
-    private var isPaused = false
+    // Written on the caller thread, read inside the automation coroutine
+    // (Dispatchers.Default catch block) — @Volatile for cross-thread visibility.
+    @Volatile private var isPaused = false
     private var pausedSession: PausedSession? = null
     private var sessionStartTime: Long = 0
     
