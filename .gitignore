@@ -113,3 +113,5 @@ app/build/outputs/bundle/
 # Baseline Profiles
 app/release/baselineProfiles/
 **/*.dm
+keystore.properties
+app/release-signing.jks
