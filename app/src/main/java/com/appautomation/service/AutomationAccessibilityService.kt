@@ -763,7 +763,8 @@ class AutomationAccessibilityService : AccessibilityService() {
         return findNode { node ->
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
             val text = node.text?.toString()?.lowercase() ?: ""
-            node.isClickable && labels.any { desc.contains(it) || text.contains(it) }
+            node.isVisibleToUser && node.isClickable &&
+                labels.any { desc.contains(it) || text.contains(it) }
         }
     }
 
@@ -771,13 +772,13 @@ class AutomationAccessibilityService : AccessibilityService() {
      *  RatingBar with no per-star content-desc, so we tap it by position. */
     private fun findRatingBar(): android.view.accessibility.AccessibilityNodeInfo? = findNode { node ->
         val cls = node.className?.toString() ?: ""
-        node.isClickable && (cls.contains("SeekBar") || cls.contains("RatingBar"))
+        node.isVisibleToUser && node.isClickable && (cls.contains("SeekBar") || cls.contains("RatingBar"))
     }
 
     /** Find the review text field (EditText) in the composer. */
     private fun findEditText(): android.view.accessibility.AccessibilityNodeInfo? = findNode { node ->
         val cls = node.className?.toString() ?: ""
-        node.isEditable || cls.contains("EditText")
+        node.isVisibleToUser && (node.isEditable || cls.contains("EditText"))
     }
 
     /** Return the node that currently holds input focus, if it is editable.
@@ -798,7 +799,7 @@ class AutomationAccessibilityService : AccessibilityService() {
         return findNode { node ->
             val desc = node.contentDescription?.toString()?.lowercase()?.trim() ?: ""
             val text = node.text?.toString()?.lowercase()?.trim() ?: ""
-            labels.any { it == desc || it == text }
+            node.isVisibleToUser && labels.any { it == desc || it == text }
         }
     }
 
