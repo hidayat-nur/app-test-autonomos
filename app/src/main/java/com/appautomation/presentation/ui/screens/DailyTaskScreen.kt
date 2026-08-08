@@ -45,17 +45,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import com.appautomation.data.model.DailyTask
@@ -160,7 +162,7 @@ fun DailyTaskScreen(
                     }
                 },
                 actions = {
-                    Button(onClick = {
+                    IconButton(onClick = {
                         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                         val cal = Calendar.getInstance()
                         try {
@@ -169,9 +171,9 @@ fun DailyTaskScreen(
                         cal.add(Calendar.DAY_OF_MONTH, -1)
                         viewModel.setDate(sdf.format(cal.time))
                     }) {
-                        Text("<")
+                        Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous day")
                     }
-                    
+
                     // Format date for display: "2 Des 25"
                     val displayDate = remember(selectedDate) {
                         try {
@@ -186,10 +188,10 @@ fun DailyTaskScreen(
                     
                     Text(
                         text = displayDate,
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                        fontWeight = FontWeight.Bold
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                        style = MaterialTheme.typography.titleSmall
                     )
-                    Button(onClick = {
+                    IconButton(onClick = {
                         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                         val cal = Calendar.getInstance()
                         try {
@@ -198,7 +200,7 @@ fun DailyTaskScreen(
                         cal.add(Calendar.DAY_OF_MONTH, 1)
                         viewModel.setDate(sdf.format(cal.time))
                     }) {
-                        Text(">")
+                        Icon(Icons.Filled.ChevronRight, contentDescription = "Next day")
                     }
                 }
             )
@@ -263,9 +265,14 @@ fun DailyTaskScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error,
+                                        contentColor = MaterialTheme.colorScheme.onError
+                                    )
                                 ) {
-                                    Text("🗑️ Delete Selected (${selectedForDelete.size})")
+                                    Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.width(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Delete Selected (${selectedForDelete.size})")
                                 }
                             }
                         }
@@ -421,8 +428,7 @@ private fun SectionHeader(title: String) {
     Column {
         Text(
             text = title,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(vertical = 8.dp)
         )
         Divider()
@@ -442,9 +448,11 @@ private fun DeleteTaskItemWithCheckbox(
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = if (isInstalled) CardDefaults.cardColors() 
-                 else CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.5f))
+        colors = if (isInstalled) CardDefaults.cardColors()
+                 else CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
+        val primaryText = if (isInstalled) MaterialTheme.colorScheme.onSurface
+                          else MaterialTheme.colorScheme.onSurfaceVariant
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -458,14 +466,14 @@ private fun DeleteTaskItemWithCheckbox(
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = task.appName, 
-                    fontWeight = FontWeight.Medium,
-                    color = if (isInstalled) Color.Unspecified else Color.Gray
+                    text = task.appName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = primaryText
                 )
                 Text(
                     text = if (isInstalled) task.packageName else "${task.packageName} (Not installed)",
-                    fontSize = 12.sp, 
-                    color = if (isInstalled) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Button(
@@ -492,8 +500,12 @@ private fun RateTaskItem(task: DailyTask, onRateClick: () -> Unit) {
                 .padding(12.dp)
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = task.appName, fontWeight = FontWeight.Medium)
-                Text(text = task.packageName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(text = task.appName, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = task.packageName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             Button(onClick = onRateClick) {
                 Text("Play Store")
@@ -528,21 +540,32 @@ private fun TestTaskItem(task: DailyTask, onAcceptClick: () -> Unit, onAppClick:
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = task.appName, fontWeight = FontWeight.Medium)
+                    Text(text = task.appName, style = MaterialTheme.typography.titleSmall)
                     if (hasCred) {
                         Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            Icons.Filled.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.width(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
                         Text(
-                            text = "🔑 Login",
-                            fontSize = 11.sp,
+                            text = "Login",
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                     }
                 }
-                Text(text = task.packageName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = task.packageName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 if (hasCred) {
                     Text(
                         text = "Ketuk kartu untuk lihat login",
-                        fontSize = 11.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                 }
@@ -601,7 +624,11 @@ private fun CredentialsDialog(task: DailyTask, onDismiss: () -> Unit) {
 @Composable
 private fun CredentialRow(label: String, value: String, onCopy: (String) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(text = label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -630,8 +657,12 @@ private fun UpdateTaskItem(task: DailyTask, onUpdateClick: () -> Unit) {
                 .padding(12.dp)
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = task.appName, fontWeight = FontWeight.Medium)
-                Text(text = task.packageName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(text = task.appName, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = task.packageName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             Button(onClick = onUpdateClick) {
                 Text("Update")
@@ -655,7 +686,7 @@ private fun NoteTaskItem(task: DailyTask) {
         ) {
             Text(
                 text = task.appName, // Content is stored in appName
-                fontSize = 14.sp,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
