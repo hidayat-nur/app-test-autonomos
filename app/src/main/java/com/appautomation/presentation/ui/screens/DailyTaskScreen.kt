@@ -93,6 +93,14 @@ fun DailyTaskScreen(
     // Refresh counter to force recomposition when returning from uninstall
     var refreshKey by remember { mutableIntStateOf(0) }
 
+    // Resolve installed-status ONCE per (task set, refresh) instead of calling
+    // PackageManager for every item on every recomposition (was scroll jank).
+    val installedStatus = remember(tasksGrouped, refreshKey) {
+        tasksGrouped.values.flatten()
+            .associate { it.packageName to isAppInstalled(context.packageManager, it.packageName) }
+    }
+    fun installed(pkg: String) = installedStatus[pkg] == true
+
     // Multi-select state for delete apps - moved up so lifecycle can access
     val selectedForDelete = remember { mutableStateListOf<String>() }
     var isDeleting by remember { mutableStateOf(false) }
@@ -221,7 +229,7 @@ fun DailyTaskScreen(
                     
                     // Select All + Delete Selected button in fixed row
                     item(key = "select_all_$refreshKey") {
-                        val installedApps = deleteApps.filter { isAppInstalled(context.packageManager, it.packageName) }
+                        val installedApps = deleteApps.filter { installed(it.packageName) }
                         Column {
                             // Select All row
                             Row(
@@ -265,7 +273,7 @@ fun DailyTaskScreen(
                     
                     // Task items
                     items(deleteApps) { task ->
-                        val isInstalled = isAppInstalled(context.packageManager, task.packageName)
+                        val isInstalled = installed(task.packageName)
                         DeleteTaskItemWithCheckbox(
                             task = task,
                             isSelected = task.id in selectedForDelete,

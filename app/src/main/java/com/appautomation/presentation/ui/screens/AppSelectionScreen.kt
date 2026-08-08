@@ -1,7 +1,6 @@
 package com.appautomation.presentation.ui.screens
 
 import android.content.Intent
-import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -541,10 +540,14 @@ fun AppSelectionItem(
         Spacer(modifier = Modifier.width(12.dp))
         
         Box {
-            app.icon?.let { drawable ->
-                val bitmap: Bitmap = drawable.toBitmap()
+            // Convert the drawable to an ImageBitmap ONCE per app, not on every
+            // recomposition (toBitmap() is expensive and was a scroll-jank source).
+            val iconBitmap = remember(app.packageName) {
+                app.icon?.toBitmap()?.asImageBitmap()
+            }
+            iconBitmap?.let { bitmap ->
                 Image(
-                    bitmap = bitmap.asImageBitmap(),
+                    bitmap = bitmap,
                     contentDescription = null,
                     modifier = Modifier.size(48.dp)
                 )
