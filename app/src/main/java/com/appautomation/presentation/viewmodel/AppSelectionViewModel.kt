@@ -31,7 +31,11 @@ class AppSelectionViewModel @Inject constructor(
         private const val PREF_SELECTED_APPS = "selected_apps"
     }
     
-    private val prefs: SharedPreferences = context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+    // Lazy so the first (disk-touching) access happens inside the IO coroutine in
+    // init, not on the main thread during ViewModel construction.
+    private val prefs: SharedPreferences by lazy {
+        context.getSharedPreferences(Constants.PREFS_NAME, Context.MODE_PRIVATE)
+    }
     
     private val _installedApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val installedApps: StateFlow<List<AppInfo>> = _installedApps.asStateFlow()
@@ -61,10 +65,14 @@ class AppSelectionViewModel @Inject constructor(
     val testedAppsToday: StateFlow<Set<String>> = _testedAppsToday.asStateFlow()
     
     init {
-        loadGlobalDuration()
-        loadBatchSettings()
-        loadTestedAppsToday()
-        loadSavedSelections()
+        // Prefs reads do disk I/O; keep them off the main thread. Order matters:
+        // loadGlobalDuration must run before loadSavedSelections (which reads it).
+        viewModelScope.launch(Dispatchers.IO) {
+            loadGlobalDuration()
+            loadBatchSettings()
+            loadTestedAppsToday()
+            loadSavedSelections()
+        }
         loadInstalledApps()
     }
     
@@ -228,18 +236,6 @@ class AppSelectionViewModel @Inject constructor(
     
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
-    }
-    
-    fun getFilteredApps(): List<AppInfo> {
-        val query = _searchQuery.value.lowercase()
-        return if (query.isEmpty()) {
-            _installedApps.value
-        } else {
-            _installedApps.value.filter {
-                it.appName.lowercase().contains(query) ||
-                        it.packageName.lowercase().contains(query)
-            }
-        }
     }
     
     fun startAutomation(): Boolean {
