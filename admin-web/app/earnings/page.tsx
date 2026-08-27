@@ -82,26 +82,26 @@ async function generateInvoicePDF(data: InvoiceData) {
         doc.rect(0, 46, pageW, 2, 'F');
 
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(19);
+        doc.setFontSize(16);
         doc.setTextColor(255, 255, 255);
-        doc.text('BORDER TECH', M, 22);
+        doc.text('PT Border Tech Indonesia', M, 21);
 
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8.5);
         doc.setTextColor(...SLATE_400);
-        doc.text('Sistem Manajemen Aplikasi & Penghasilan', M, 30);
-        doc.text('border-tech.id', M, 35.5);
+        doc.text('Sistem Manajemen Aplikasi dan Penghasilan', M, 29);
+        doc.text('borderpedia.id', M, 34.5);
 
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(24);
         doc.setTextColor(...GREEN);
-        doc.text('INVOICE', valX, 22, { align: 'right' });
+        doc.text('FAKTUR', valX, 21, { align: 'right' });
 
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8.5);
         doc.setTextColor(...SLATE_400);
-        doc.text(`No.  ${invoiceNo}`, valX, 31, { align: 'right' });
-        doc.text(`Tanggal  ${dateStr}`, valX, 37, { align: 'right' });
+        doc.text(`Nomor  ${invoiceNo}`, valX, 30, { align: 'right' });
+        doc.text(`Tanggal  ${dateStr}`, valX, 36, { align: 'right' });
     };
 
     const drawMiniHeader = () => {
@@ -112,11 +112,11 @@ async function generateInvoicePDF(data: InvoiceData) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(11);
         doc.setTextColor(255, 255, 255);
-        doc.text('BORDER TECH', M, 12);
+        doc.text('PT Border Tech Indonesia', M, 12);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(...SLATE_400);
-        doc.text(`INVOICE  ${invoiceNo}`, valX, 12, { align: 'right' });
+        doc.text(`FAKTUR  ${invoiceNo}`, valX, 12, { align: 'right' });
     };
 
     // ── Cursor + pagination ──────────────────────────────────
@@ -147,7 +147,7 @@ async function generateInvoicePDF(data: InvoiceData) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
     doc.setTextColor(...SLATE_500);
-    doc.text('DIPERUNTUKKAN KEPADA', M + 6, y + 8);
+    doc.text('DITUJUKAN KEPADA', M + 6, y + 8);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12.5);
     doc.setTextColor(...SLATE);
@@ -155,7 +155,7 @@ async function generateInvoicePDF(data: InvoiceData) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(...SLATE_600);
-    doc.text(clip(`(${data.recipientNickname})  ·  Staff`, boxW - 12, 9), M + 6, y + 25);
+    doc.text(clip(`(${data.recipientNickname})  ·  Staf`, boxW - 12, 9), M + 6, y + 25);
 
     // Periode
     doc.setFillColor(240, 253, 244); // green-50
@@ -172,7 +172,7 @@ async function generateInvoicePDF(data: InvoiceData) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(...SLATE_600);
-    doc.text('Bagi hasil bulanan · 1/3 dari Net', boxX2 + 6, y + 25);
+    doc.text('Bagi hasil bulanan · 1/3 pendapatan bersih', boxX2 + 6, y + 25);
 
     y += boxH + 12;
 
@@ -222,7 +222,7 @@ async function generateInvoicePDF(data: InvoiceData) {
     drawTableHead();
 
     // Gross
-    drawRow('Total Pendapatan Kotor (Gross)', formatRp(data.gross), { bg: [248, 250, 252], bold: true });
+    drawRow('Total Pendapatan Kotor (Bruto)', formatRp(data.gross), { bg: [248, 250, 252], bold: true });
 
     // Operational costs — itemised, page-breaks safely
     if (data.opsList.length > 0) {
@@ -234,12 +234,12 @@ async function generateInvoicePDF(data: InvoiceData) {
     }
 
     // Total operational
-    drawRow('Total Potongan Operasional', `- ${formatRp(data.totalOps)}`, {
+    drawRow('Total Biaya Operasional', `- ${formatRp(data.totalOps)}`, {
         bg: [254, 242, 242], color: RED_700, bold: true,
     });
 
     // Net
-    drawRow('Net Penghasilan (setelah operasional)', formatRp(data.net), {
+    drawRow('Pendapatan Bersih (setelah biaya operasional)', formatRp(data.net), {
         bg: [240, 253, 244], color: GREEN_800, bold: true,
     });
 
@@ -251,7 +251,7 @@ async function generateInvoicePDF(data: InvoiceData) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10.5);
     doc.setTextColor(255, 255, 255);
-    doc.text(clip(`Bagian ${data.recipientNickname}  (1/3 Net)`, contentW - 60, 10.5, 'bold'), M + 6, y + 9.5);
+    doc.text(clip(`Bagian ${data.recipientNickname}  (1/3 Pendapatan Bersih)`, contentW - 60, 10.5, 'bold'), M + 6, y + 9.5);
     doc.setFontSize(12);
     doc.text(formatRp(data.share), valX - 6, y + 9.5, { align: 'right' });
     y += 15;
@@ -313,7 +313,7 @@ async function generateInvoicePDF(data: InvoiceData) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
         doc.setTextColor(...SLATE_400);
-        doc.text(`${invoiceNo}  ·  Digenerate ${dateStr}  ·  Border Tech`, M, pageH - 5.5);
+        doc.text(`${invoiceNo}  ·  Dokumen dibuat otomatis pada ${dateStr}  ·  PT Border Tech Indonesia`, M, pageH - 5.5);
         doc.text(`Halaman ${p} / ${pageCount}`, valX, pageH - 5.5, { align: 'right' });
     }
 
