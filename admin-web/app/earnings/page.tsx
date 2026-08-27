@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Noto_Sans_Javanese } from 'next/font/google';
 import { getMasterApps, getOperationalCosts, addOperationalCost, deleteOperationalCost, type MasterApp, type OperationalCost } from '@/lib/firestore';
+import { toAksara } from '@/lib/aksara';
+
+// Javanese webfont — the browser shapes the script correctly when we
+// rasterise the invoice with html2canvas. `variable` keeps it opt-in so the
+// dashboard UI itself is unaffected.
+const jawaFont = Noto_Sans_Javanese({ weight: ['400', '700'], subsets: ['javanese'], display: 'swap', variable: '--font-jawa' });
 
 type QuickFilter = 'TODAY' | 'THIS_MONTH' | 'THIS_YEAR' | 'ALL_TIME' | 'CUSTOM';
 
@@ -37,289 +44,186 @@ interface InvoiceData {
 }
 
 async function generateInvoicePDF(data: InvoiceData) {
-    const { jsPDF } = await import('jspdf');
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const M = 18; // margin
-    const contentW = pageW - M * 2;
-    const valX = pageW - M; // right edge for amounts
-
-    // ── Palette (brand: slate + green) ───────────────────────
-    const SLATE: [number, number, number] = [15, 23, 42];
-    const SLATE_500: [number, number, number] = [100, 116, 139];
-    const SLATE_400: [number, number, number] = [148, 163, 184];
-    const SLATE_600: [number, number, number] = [71, 85, 105];
-    const GREEN: [number, number, number] = [34, 197, 94];
-    const GREEN_800: [number, number, number] = [22, 101, 52];
-    const RED_700: [number, number, number] = [185, 28, 28];
-    const HAIRLINE: [number, number, number] = [226, 232, 240]; // slate-200
-
-    const FOOTER_H = 14;
-    const SAFE_BOTTOM = pageH - FOOTER_H - 6;
+    const [{ jsPDF }, { default: html2canvas }] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas-pro'),
+    ]);
 
     const invoiceNo = generateInvoiceNumber(data.recipientName, data.period);
     const today = new Date();
     const dateStr = today.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
 
-    // ── Text helpers ─────────────────────────────────────────
-    // Truncate text with an ellipsis so it never spills out of its column.
-    const clip = (text: string, maxW: number, size: number, style: 'normal' | 'bold' = 'normal') => {
-        doc.setFont('helvetica', style);
-        doc.setFontSize(size);
-        if (doc.getTextWidth(text) <= maxW) return text;
-        let t = text;
-        while (t.length > 1 && doc.getTextWidth(t + '…') > maxW) t = t.slice(0, -1);
-        return t.trimEnd() + '…';
+    const jv = (t: string) => toAksara(t);      // labels → Aksara Jawa
+    const money = (n: number) => formatRp(n);    // nominal amounts stay Latin
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Palette — hex only (keeps html2canvas-pro happy; no oklch).
+    const C = {
+        slate: '#0f172a', slate600: '#475569', slate500: '#64748b', slate400: '#94a3b8',
+        green: '#22c55e', green50: '#f0fdf4', green200: '#bbf7d0', green800: '#166534',
+        red50: '#fef2f2', red700: '#b91c1c', ops: '#c2410c',
+        line: '#e2e8f0', slate50: '#f8fafc', white: '#ffffff',
     };
+    const family = jawaFont.style.fontFamily;
 
-    // ── Page chrome ──────────────────────────────────────────
-    const drawFullHeader = () => {
-        doc.setFillColor(...SLATE);
-        doc.rect(0, 0, pageW, 46, 'F');
-        doc.setFillColor(...GREEN);
-        doc.rect(0, 46, pageW, 2, 'F');
+    // Operational-cost rows (itemised, or a single fallback row).
+    const opsSource = data.opsList.length > 0
+        ? data.opsList.map(op => ({ label: op.name, amount: op.amount }))
+        : [{ label: 'Biaya Operasional', amount: data.totalOps }];
+    const opsRows = opsSource.map(o => `
+        <div class="brk" style="display:flex;justify-content:space-between;align-items:center;padding:7px 14px;border-bottom:1px solid ${C.line};color:${C.ops};font-size:13px;">
+            <span style="padding-left:10px;">${jv(esc(o.label))}</span>
+            <span style="font-weight:700;white-space:nowrap;">- ${money(o.amount)}</span>
+        </div>`).join('');
 
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(16);
-        doc.setTextColor(255, 255, 255);
-        doc.text('PT Border Tech Indonesia', M, 21);
+    const sigBox = (label: string, name: string) => `
+        <div style="flex:1;border:1px solid ${C.line};border-radius:8px;background:#fcfcfd;padding:10px 8px 12px;text-align:center;">
+            <div style="font-size:11px;color:${C.slate500};margin-bottom:26px;">${jv(esc(label))}</div>
+            <div style="border-top:1px solid ${C.slate400};margin:0 8px 6px;"></div>
+            <div style="font-size:12px;font-weight:700;color:${C.slate};">${jv(esc(name))}</div>
+        </div>`;
 
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
-        doc.setTextColor(...SLATE_400);
-        doc.text('Sistem Manajemen Aplikasi dan Penghasilan', M, 29);
-        doc.text('borderpedia.id', M, 34.5);
+    const html = `
+    <div style="width:794px;background:${C.white};color:${C.slate};font-family:${family};">
+        <div class="brk" style="background:${C.slate};padding:22px 24px;display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+                <div style="font-size:22px;font-weight:700;color:#fff;">${jv('PT Border Tech Indonesia')}</div>
+                <div style="font-size:11px;color:${C.slate400};margin-top:6px;">${jv('Sistem Manajemen Aplikasi dan Penghasilan')}</div>
+                <div style="font-size:11px;color:${C.slate400};margin-top:2px;">borderpedia.id</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:30px;font-weight:700;color:${C.green};line-height:1;">${jv('FAKTUR')}</div>
+                <div style="font-size:11px;color:${C.slate400};margin-top:8px;">${jv('Nomor')} &nbsp;${invoiceNo}</div>
+                <div style="font-size:11px;color:${C.slate400};margin-top:2px;">${jv('Tanggal')} &nbsp;${jv(dateStr)}</div>
+            </div>
+        </div>
+        <div style="height:3px;background:${C.green};"></div>
 
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(24);
-        doc.setTextColor(...GREEN);
-        doc.text('FAKTUR', valX, 21, { align: 'right' });
+        <div style="padding:22px 24px 0;">
+            <div class="brk" style="display:flex;gap:12px;margin-bottom:18px;">
+                <div style="flex:1;border:1px solid ${C.line};border-radius:8px;background:${C.slate50};padding:12px 14px;">
+                    <div style="font-size:10px;font-weight:700;color:${C.slate500};">${jv('DITUJUKAN KEPADA')}</div>
+                    <div style="font-size:16px;font-weight:700;margin-top:6px;">${jv(esc(data.recipientName))}</div>
+                    <div style="font-size:12px;color:${C.slate600};margin-top:4px;">(${jv(esc(data.recipientNickname))}) &middot; ${jv('Staf')}</div>
+                </div>
+                <div style="flex:1;border:1px solid ${C.green200};border-radius:8px;background:${C.green50};padding:12px 14px;">
+                    <div style="font-size:10px;font-weight:700;color:${C.slate500};">${jv('PERIODE PEMBAYARAN')}</div>
+                    <div style="font-size:16px;font-weight:700;margin-top:6px;">${jv(esc(data.periodLabel))}</div>
+                    <div style="font-size:12px;color:${C.slate600};margin-top:4px;">${jv('Bagi hasil bulanan')} &middot; ${jv('1/3 pendapatan bersih')}</div>
+                </div>
+            </div>
 
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
-        doc.setTextColor(...SLATE_400);
-        doc.text(`Nomor  ${invoiceNo}`, valX, 30, { align: 'right' });
-        doc.text(`Tanggal  ${dateStr}`, valX, 36, { align: 'right' });
-    };
+            <div class="brk" style="display:flex;justify-content:space-between;background:${C.slate};color:#fff;padding:8px 14px;border-radius:6px 6px 0 0;font-size:11px;font-weight:700;">
+                <span>${jv('KETERANGAN')}</span><span>${jv('JUMLAH')}</span>
+            </div>
+            <div class="brk" style="display:flex;justify-content:space-between;padding:8px 14px;background:${C.slate50};border-bottom:1px solid ${C.line};font-weight:700;font-size:13px;">
+                <span>${jv('Total Pendapatan Kotor (Bruto)')}</span><span style="white-space:nowrap;">${money(data.gross)}</span>
+            </div>
+            ${opsRows}
+            <div class="brk" style="display:flex;justify-content:space-between;padding:8px 14px;background:${C.red50};color:${C.red700};border-bottom:1px solid ${C.line};font-weight:700;font-size:13px;">
+                <span>${jv('Total Biaya Operasional')}</span><span style="white-space:nowrap;">- ${money(data.totalOps)}</span>
+            </div>
+            <div class="brk" style="display:flex;justify-content:space-between;padding:8px 14px;background:${C.green50};color:${C.green800};font-weight:700;font-size:13px;">
+                <span>${jv('Pendapatan Bersih (setelah biaya operasional)')}</span><span style="white-space:nowrap;">${money(data.net)}</span>
+            </div>
 
-    const drawMiniHeader = () => {
-        doc.setFillColor(...SLATE);
-        doc.rect(0, 0, pageW, 18, 'F');
-        doc.setFillColor(...GREEN);
-        doc.rect(0, 18, pageW, 1.5, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
-        doc.setTextColor(255, 255, 255);
-        doc.text('PT Border Tech Indonesia', M, 12);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(...SLATE_400);
-        doc.text(`FAKTUR  ${invoiceNo}`, valX, 12, { align: 'right' });
-    };
+            <div class="brk" style="display:flex;justify-content:space-between;align-items:center;background:${C.green800};color:#fff;border-radius:8px;padding:11px 14px;margin-top:14px;">
+                <span style="font-weight:700;font-size:14px;">${jv('Bagian')} ${jv(esc(data.recipientNickname))} (1/3 ${jv('Pendapatan Bersih')})</span>
+                <span style="font-weight:700;font-size:16px;white-space:nowrap;">${money(data.share)}</span>
+            </div>
 
-    // ── Cursor + pagination ──────────────────────────────────
-    let y = 60; // content start on page 1 (below full header)
+            <div class="brk" style="display:flex;justify-content:space-between;align-items:center;background:${C.slate};border-radius:10px;padding:16px 18px;margin-top:12px;">
+                <span style="font-size:14px;font-weight:700;color:#fff;">${jv(esc(data.recipientName))}</span>
+                <span style="text-align:right;">
+                    <span style="display:block;font-size:11px;color:${C.slate400};">${jv('TOTAL YANG DITERIMA')}</span>
+                    <span style="display:block;font-size:24px;font-weight:700;color:${C.green};white-space:nowrap;">${money(data.share)}</span>
+                </span>
+            </div>
 
-    // Break to a new page when `space` mm would overflow the safe area.
-    // When inside the table, redraw the table header on the fresh page.
-    const ensure = (space: number, inTable = false) => {
-        if (y + space <= SAFE_BOTTOM) return;
-        doc.addPage();
-        drawMiniHeader();
-        y = 28;
-        if (inTable) drawTableHead();
-    };
+            <div class="brk" style="display:flex;gap:12px;margin-top:26px;">
+                ${sigBox('Dibuat oleh', 'Bos Nur')}
+                ${sigBox('Disetujui oleh', 'Bos Nur')}
+                ${sigBox('Diterima oleh', data.recipientNickname)}
+            </div>
 
-    drawFullHeader();
+            <div class="brk" style="margin-top:26px;border-top:2px solid ${C.green};padding-top:8px;padding-bottom:18px;display:flex;justify-content:space-between;font-size:9px;color:${C.slate500};">
+                <span>${invoiceNo} &middot; ${jv('Dokumen dibuat otomatis pada')} ${jv(dateStr)} &middot; ${jv('PT Border Tech Indonesia')}</span>
+                <span>borderpedia.id</span>
+            </div>
+        </div>
+    </div>`;
 
-    // ── Info block: Bill To + Periode ────────────────────────
-    const boxH = 34;
-    const boxW = (contentW - 8) / 2;
-    const boxX2 = M + boxW + 8;
+    // ── Render offscreen so the browser shapes the Javanese script ──
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:-10000px;top:0;z-index:-1;';
+    host.innerHTML = html;
+    document.body.appendChild(host);
+    const root = host.firstElementChild as HTMLElement;
 
-    // Bill To
-    doc.setFillColor(248, 250, 252); // slate-50
-    doc.setDrawColor(...HAIRLINE);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(M, y, boxW, boxH, 2.5, 2.5, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...SLATE_500);
-    doc.text('DITUJUKAN KEPADA', M + 6, y + 8);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12.5);
-    doc.setTextColor(...SLATE);
-    doc.text(clip(data.recipientName, boxW - 12, 12.5, 'bold'), M + 6, y + 17);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...SLATE_600);
-    doc.text(clip(`(${data.recipientNickname})  ·  Staf`, boxW - 12, 9), M + 6, y + 25);
+    // Wait for the Javanese webfont, otherwise glyphs render as boxes.
+    try {
+        await Promise.all([
+            document.fonts.load(`700 16px ${family}`),
+            document.fonts.load(`400 13px ${family}`),
+        ]);
+        await document.fonts.ready;
+    } catch { /* Font Loading API is best-effort */ }
 
-    // Periode
-    doc.setFillColor(240, 253, 244); // green-50
-    doc.setDrawColor(209, 250, 229); // green-200
-    doc.roundedRect(boxX2, y, boxW, boxH, 2.5, 2.5, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...SLATE_500);
-    doc.text('PERIODE PEMBAYARAN', boxX2 + 6, y + 8);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12.5);
-    doc.setTextColor(...SLATE);
-    doc.text(clip(data.periodLabel, boxW - 12, 12.5, 'bold'), boxX2 + 6, y + 17);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...SLATE_600);
-    doc.text('Bagi hasil bulanan · 1/3 pendapatan bersih', boxX2 + 6, y + 25);
+    const canvas = await html2canvas(root, {
+        scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false,
+    });
 
-    y += boxH + 12;
+    // Break candidates at block boundaries so no row is sliced mid-line.
+    const ratio = canvas.width / root.offsetWidth;
+    const rootTop = root.getBoundingClientRect().top;
+    const breaks = Array.from(root.querySelectorAll('.brk'))
+        .map(el => (el.getBoundingClientRect().top - rootTop) * ratio)
+        .filter(v => v > 1);
+    document.body.removeChild(host);
 
-    // ── Rincian table ────────────────────────────────────────
-    const ROW_H = 9;
-    const labelX = M + 6;
-    const labelMaxW = contentW - 12 - 45; // reserve ~45mm for the amount column
+    // ── Assemble the PDF, paginating at safe break points ──
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageWmm = doc.internal.pageSize.getWidth();
+    const pageHmm = doc.internal.pageSize.getHeight();
+    const pxPerMm = canvas.width / pageWmm;
+    const pageHpx = Math.floor(pageHmm * pxPerMm);
 
-    const drawTableHead = () => {
-        doc.setFillColor(...SLATE);
-        doc.roundedRect(M, y, contentW, 9, 1.5, 1.5, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.setTextColor(255, 255, 255);
-        doc.text('KETERANGAN', labelX, y + 6);
-        doc.text('JUMLAH', valX - 6, y + 6, { align: 'right' });
-        y += 9;
-    };
-
-    // A single striped/highlight row with a bottom hairline.
-    const drawRow = (
-        label: string,
-        value: string,
-        opts: { bg?: [number, number, number]; color?: [number, number, number]; bold?: boolean; indent?: number } = {},
-    ) => {
-        ensure(ROW_H, true);
-        const color = opts.color ?? SLATE;
-        const lx = labelX + (opts.indent ?? 0);
-        if (opts.bg) {
-            doc.setFillColor(...opts.bg);
-            doc.rect(M, y, contentW, ROW_H, 'F');
+    const slices: Array<[number, number]> = [];
+    let start = 0;
+    while (start < canvas.height) {
+        let end = Math.min(start + pageHpx, canvas.height);
+        if (end < canvas.height) {
+            const safe = breaks.filter(b => b > start + pageHpx * 0.3 && b <= end).pop();
+            if (safe) end = safe;
         }
-        doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
-        doc.setFontSize(9.5);
-        doc.setTextColor(...color);
-        doc.text(clip(label, labelMaxW - (opts.indent ?? 0), 9.5, opts.bold ? 'bold' : 'normal'), lx, y + 6);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...color);
-        doc.text(value, valX - 6, y + 6, { align: 'right' });
-        // hairline separator
-        doc.setDrawColor(...HAIRLINE);
-        doc.setLineWidth(0.2);
-        doc.line(M, y + ROW_H, M + contentW, y + ROW_H);
-        y += ROW_H;
-    };
-
-    drawTableHead();
-
-    // Gross
-    drawRow('Total Pendapatan Kotor (Bruto)', formatRp(data.gross), { bg: [248, 250, 252], bold: true });
-
-    // Operational costs — itemised, page-breaks safely
-    if (data.opsList.length > 0) {
-        data.opsList.forEach((op) => {
-            drawRow(op.name, `- ${formatRp(op.amount)}`, { color: [194, 65, 12], indent: 4 });
-        });
-    } else {
-        drawRow('Biaya Operasional', `- ${formatRp(data.totalOps)}`, { color: [194, 65, 12], indent: 4 });
+        end = Math.ceil(end);
+        slices.push([start, end]);
+        start = end;
     }
 
-    // Total operational
-    drawRow('Total Biaya Operasional', `- ${formatRp(data.totalOps)}`, {
-        bg: [254, 242, 242], color: RED_700, bold: true,
+    slices.forEach(([s, e], idx) => {
+        const h = e - s;
+        const slice = document.createElement('canvas');
+        slice.width = canvas.width;
+        slice.height = h;
+        const ctx = slice.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, slice.width, slice.height);
+        ctx.drawImage(canvas, 0, s, canvas.width, h, 0, 0, canvas.width, h);
+        const hmm = h / pxPerMm;
+        if (idx > 0) doc.addPage();
+        doc.addImage(slice.toDataURL('image/png'), 'PNG', 0, 0, pageWmm, hmm);
+        if (slices.length > 1) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(148, 163, 184);
+            doc.text(`${idx + 1} / ${slices.length}`, pageWmm - 8, pageHmm - 5, { align: 'right' });
+        }
     });
 
-    // Net
-    drawRow('Pendapatan Bersih (setelah biaya operasional)', formatRp(data.net), {
-        bg: [240, 253, 244], color: GREEN_800, bold: true,
-    });
-
-    // ── Share highlight (1/3) ────────────────────────────────
-    y += 6;
-    ensure(16);
-    doc.setFillColor(...GREEN_800);
-    doc.roundedRect(M, y, contentW, 15, 2.5, 2.5, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10.5);
-    doc.setTextColor(255, 255, 255);
-    doc.text(clip(`Bagian ${data.recipientNickname}  (1/3 Pendapatan Bersih)`, contentW - 60, 10.5, 'bold'), M + 6, y + 9.5);
-    doc.setFontSize(12);
-    doc.text(formatRp(data.share), valX - 6, y + 9.5, { align: 'right' });
-    y += 15;
-
-    // ── Total received card ──────────────────────────────────
-    y += 8;
-    ensure(24);
-    doc.setFillColor(...SLATE);
-    doc.roundedRect(M, y, contentW, 22, 3, 3, 'F');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...SLATE_400);
-    doc.text('TOTAL YANG DITERIMA', valX - 6, y + 8, { align: 'right' });
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(17);
-    doc.setTextColor(...GREEN);
-    doc.text(formatRp(data.share), valX - 6, y + 17, { align: 'right' });
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10.5);
-    doc.setTextColor(255, 255, 255);
-    doc.text(clip(data.recipientName.toUpperCase(), contentW - 55, 10.5, 'bold'), M + 6, y + 13);
-    y += 22;
-
-    // ── Signature area (kept whole; never straddles a page) ──
-    y += 14;
-    ensure(34);
-    const sigColW = contentW / 3;
-    const drawSigBox = (label: string, name: string, xOff: number) => {
-        const bx = M + xOff;
-        const bw = sigColW - 4;
-        doc.setFillColor(252, 252, 253);
-        doc.setDrawColor(...HAIRLINE);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(bx, y, bw, 32, 2.5, 2.5, 'FD');
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(...SLATE_500);
-        doc.text(label, bx + bw / 2, y + 7, { align: 'center' });
-        doc.setDrawColor(...SLATE_400);
-        doc.setLineWidth(0.3);
-        doc.line(bx + 7, y + 23, bx + bw - 7, y + 23);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.setTextColor(...SLATE);
-        doc.text(clip(name, bw - 10, 8.5, 'bold'), bx + bw / 2, y + 29, { align: 'center' });
-    };
-    drawSigBox('Dibuat oleh,', 'Bos Nur', 0);
-    drawSigBox('Disetujui oleh,', 'Bos Nur', sigColW);
-    drawSigBox('Diterima oleh,', data.recipientNickname, sigColW * 2);
-
-    // ── Footer + page numbers on every page ──────────────────
-    const pageCount = doc.getNumberOfPages();
-    for (let p = 1; p <= pageCount; p++) {
-        doc.setPage(p);
-        doc.setFillColor(...SLATE);
-        doc.rect(0, pageH - FOOTER_H, pageW, FOOTER_H, 'F');
-        doc.setFillColor(...GREEN);
-        doc.rect(0, pageH - FOOTER_H, pageW, 1.2, 'F');
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7.5);
-        doc.setTextColor(...SLATE_400);
-        doc.text(`${invoiceNo}  ·  Dokumen dibuat otomatis pada ${dateStr}  ·  PT Border Tech Indonesia`, M, pageH - 5.5);
-        doc.text(`Halaman ${p} / ${pageCount}`, valX, pageH - 5.5, { align: 'right' });
-    }
-
-    // ── Save ─────────────────────────────────────────────────
     doc.save(`${invoiceNo}.pdf`);
 }
+
 
 export default function EarningsDashboard() {
     const [apps, setApps] = useState<MasterApp[]>([]);
@@ -453,7 +357,7 @@ export default function EarningsDashboard() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+        <div className={`${jawaFont.variable} min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8`}>
             <div className="max-w-4xl mx-auto space-y-8">
 
                 <div className="text-center">
