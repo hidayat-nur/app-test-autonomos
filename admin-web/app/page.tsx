@@ -271,7 +271,13 @@ const [bulkPushing, setBulkPushing] = useState(false);
                 deleteDate: addDays(publishDate, 19),
                 status: 'PUBLISHED',
             });
-            const commonTask = { appName, packageName, playStoreUrl, acceptUrl };
+            const commonTask = {
+                appName,
+                packageName,
+                playStoreUrl,
+                acceptUrl,
+                ...(publishForm.credentials ? { credentials: publishForm.credentials } : {}),
+            };
             await createTask({ ...commonTask, date: publishDate, taskType: 'TEST_APP' });
             alert(`Berhasil publish! Task TEST_APP dijadwalkan ${formatDate(publishDate)}. Dorong Rate & Uninstall secara manual.`);
             setPublishModal(null);
