@@ -870,9 +870,10 @@ const [bulkPushing, setBulkPushing] = useState(false);
                                         type="text"
                                         value={publishForm.credentials}
                                         onChange={e => setPublishForm(f => ({ ...f, credentials: e.target.value }))}
-                                        placeholder="e.g. user@email.com / password"
+                                        placeholder="username:password"
                                         className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                     />
+                                    <p className="text-xs text-gray-400 mt-1">Akan tampil sebagai popup login di app (format username:password).</p>
                                 </div>
                                 <div className="flex gap-3 pt-2">
                                     <button
