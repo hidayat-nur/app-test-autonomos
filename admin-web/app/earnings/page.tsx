@@ -3,7 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getMasterApps, getOperationalCosts, addOperationalCost, deleteOperationalCost, type MasterApp, type OperationalCost } from '@/lib/firestore';
 
-type QuickFilter = 'TODAY' | 'THIS_MONTH' | 'THIS_YEAR' | 'ALL_TIME' | 'CUSTOM';
+type QuickFilter = 'TODAY' | 'YESTERDAY' | 'THIS_MONTH' | 'THIS_YEAR' | 'ALL_TIME' | 'CUSTOM' | 'DAY';
+
+function toYYYYMMDD(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const MONTHS = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -330,6 +334,11 @@ export default function EarningsDashboard() {
     const now = new Date();
     const [pickerMonth, setPickerMonth] = useState(now.getMonth());
     const [pickerYear, setPickerYear] = useState(now.getFullYear());
+    const [pickerDate, setPickerDate] = useState<string>(() => {
+        const y = new Date();
+        y.setDate(y.getDate() - 1);
+        return toYYYYMMDD(y);
+    });
 
     // Operational costs
     const [ops, setOps] = useState<OperationalCost[]>([]);
@@ -397,6 +406,17 @@ export default function EarningsDashboard() {
             const start = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
             return apps.filter(a => a.createdAt >= start);
         }
+        if (filter === 'YESTERDAY') {
+            const start = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 1).getTime();
+            const end = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+            return apps.filter(a => a.createdAt >= start && a.createdAt < end);
+        }
+        if (filter === 'DAY') {
+            const [y, m, d] = pickerDate.split('-').map(Number);
+            const start = new Date(y, m - 1, d).getTime();
+            const end = new Date(y, m - 1, d + 1).getTime();
+            return apps.filter(a => a.createdAt >= start && a.createdAt < end);
+        }
         if (filter === 'THIS_MONTH') {
             const start = new Date(n.getFullYear(), n.getMonth(), 1).getTime();
             return apps.filter(a => a.createdAt >= start);
@@ -422,11 +442,22 @@ export default function EarningsDashboard() {
     const yearOptions: number[] = [];
     for (let y = 2024; y <= now.getFullYear(); y++) yearOptions.push(y);
 
+    const formatDayLabel = (yyyymmdd: string): string => {
+        const [y, m, d] = yyyymmdd.split('-').map(Number);
+        return new Date(y, m - 1, d).toLocaleDateString('id-ID', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+        });
+    };
+
     const filterLabel = filter === 'CUSTOM'
         ? `${MONTHS[pickerMonth]} ${pickerYear}`
         : filter === 'THIS_MONTH'
             ? `${MONTHS[now.getMonth()]} ${now.getFullYear()}`
-            : filter.replace(/_/g, ' ');
+            : filter === 'YESTERDAY'
+                ? formatDayLabel(toYYYYMMDD(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)))
+                : filter === 'DAY'
+                    ? formatDayLabel(pickerDate)
+                    : filter.replace(/_/g, ' ');
 
     const activePeriod = activeMonthYYYYMM ?? toYYYYMM(now.getFullYear(), now.getMonth());
 
@@ -465,7 +496,7 @@ export default function EarningsDashboard() {
 
                 {/* Quick filters */}
                 <div className="flex justify-center flex-wrap gap-2">
-                    {(['TODAY', 'THIS_MONTH', 'THIS_YEAR', 'ALL_TIME'] as const).map((f) => (
+                    {(['TODAY', 'YESTERDAY', 'THIS_MONTH', 'THIS_YEAR', 'ALL_TIME'] as const).map((f) => (
                         <button key={f} onClick={() => setFilter(f)}
                             className={`px-6 py-2 rounded-full text-sm font-bold transition-shadow ${filter === f
                                 ? 'bg-green-600 text-white shadow-lg ring-2 ring-green-600 ring-offset-2 dark:ring-offset-gray-900'
@@ -488,6 +519,20 @@ export default function EarningsDashboard() {
                     </select>
                     {filter !== 'CUSTOM' && (
                         <button onClick={() => setFilter('CUSTOM')}
+                            className="px-4 py-1.5 rounded-lg bg-green-600 text-white text-sm font-bold hover:bg-green-700 transition">
+                            Lihat
+                        </button>
+                    )}
+                </div>
+
+                {/* Single-day picker */}
+                <div className={`flex justify-center items-center gap-2 p-3 rounded-2xl border-2 transition ${filter === 'DAY' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
+                    <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 mr-1">📆 Tanggal Tertentu:</span>
+                    <input type="date" value={pickerDate} max={toYYYYMMDD(now)}
+                        onChange={e => { setPickerDate(e.target.value); setFilter('DAY'); }}
+                        className="px-3 py-1.5 rounded-lg border text-sm font-medium bg-white dark:bg-gray-700 dark:text-white dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500" />
+                    {filter !== 'DAY' && (
+                        <button onClick={() => setFilter('DAY')}
                             className="px-4 py-1.5 rounded-lg bg-green-600 text-white text-sm font-bold hover:bg-green-700 transition">
                             Lihat
                         </button>
