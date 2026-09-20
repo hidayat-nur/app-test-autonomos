@@ -66,6 +66,7 @@ export default function MasterDashboard() {
     };
 
     useEffect(() => {
+        setSelectedIds(new Set());
         loadApps();
     }, [filter, selectedDate]);
 
@@ -170,6 +171,12 @@ const [bulkPushing, setBulkPushing] = useState(false);
     const [copyingAccept, setCopyingAccept] = useState(false);
     const [acceptCopied, setAcceptCopied] = useState(false);
 
+    // Multi-select uninstall
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [uninstallModal, setUninstallModal] = useState(false);
+    const [uninstallDate, setUninstallDate] = useState(getTodayDate());
+    const [uninstalling, setUninstalling] = useState(false);
+
     const handleCopyAcceptUrls = async () => {
         setCopyingAccept(true);
         try {
@@ -235,6 +242,37 @@ const [bulkPushing, setBulkPushing] = useState(false);
             alert('Gagal push beberapa task.');
         } finally {
             setBulkPushing(false);
+        }
+    };
+
+    const handleBulkUninstall = async () => {
+        const targets = apps.filter(a => a.id && selectedIds.has(a.id));
+        if (targets.length === 0) return;
+        setUninstallModal(false);
+        setUninstalling(true);
+        let done = 0;
+        try {
+            await Promise.all(
+                targets.map(app =>
+                    createTask({
+                        date: uninstallDate,
+                        appName: app.appName || app.clientName || 'Unknown',
+                        packageName: app.packageName || '',
+                        playStoreUrl: app.playStoreUrl || '',
+                        acceptUrl: app.acceptUrl || '',
+                        taskType: 'DELETE_APP',
+                    }).then(() => done++)
+                )
+            );
+            await Promise.all(targets.map(app => updateMasterApp(app.id!, { status: 'ARCHIVED' })));
+            alert(`Berhasil! ${done} task Uninstall dijadwalkan untuk ${formatDate(uninstallDate)}.`);
+            setSelectedIds(new Set());
+            loadApps(); loadCounts();
+        } catch (e) {
+            console.error(e);
+            alert('Gagal menjadwalkan sebagian uninstall.');
+        } finally {
+            setUninstalling(false);
         }
     };
 
@@ -323,6 +361,31 @@ const [bulkPushing, setBulkPushing] = useState(false);
         if (av > bv) return sortDir === 'asc' ? 1 : -1;
         return 0;
     });
+
+    const selectedCount = selectedIds.size;
+    const draftSelectedCount = sortedApps.filter(a => a.id && selectedIds.has(a.id) && a.status === 'DRAFT').length;
+    const allVisibleSelected = sortedApps.length > 0 && sortedApps.every(a => a.id && selectedIds.has(a.id));
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        setSelectedIds(prev => {
+            if (sortedApps.every(a => a.id && prev.has(a.id))) {
+                const next = new Set(prev);
+                sortedApps.forEach(a => a.id && next.delete(a.id));
+                return next;
+            }
+            const next = new Set(prev);
+            sortedApps.forEach(a => a.id && next.add(a.id));
+            return next;
+        });
+    };
 
     const SortTh = ({ col, label, right }: { col: SortKey; label: string; right?: boolean }) => (
         <th
@@ -495,6 +558,30 @@ const [bulkPushing, setBulkPushing] = useState(false);
                     </div>
                 )}
 
+                {/* Multi-select uninstall action bar */}
+                {selectedCount > 0 && !loading && (
+                    <div className="mb-4 p-4 rounded-lg border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4 flex-wrap">
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                            {selectedCount} app dipilih
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setSelectedIds(new Set())}
+                                className="text-xs text-gray-500 underline hover:text-gray-700 dark:hover:text-gray-300"
+                            >
+                                Batal pilih
+                            </button>
+                            <button
+                                onClick={() => { setUninstallDate(getTodayDate()); setUninstallModal(true); }}
+                                disabled={uninstalling}
+                                className="px-5 py-2 rounded-lg text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition disabled:opacity-50"
+                            >
+                                {uninstalling ? 'Mendorong...' : `🗑️ Uninstall ${selectedCount} App →`}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {error && <p className="text-red-500 bg-red-50 p-4 rounded">{error}</p>}
 
                 {!loading && !error && (
@@ -502,6 +589,15 @@ const [bulkPushing, setBulkPushing] = useState(false);
                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead className="bg-gray-50 dark:bg-gray-700/50">
                                 <tr>
+                                    <th scope="col" className="px-4 py-3 w-10">
+                                        <input
+                                            type="checkbox"
+                                            checked={allVisibleSelected}
+                                            onChange={toggleSelectAll}
+                                            aria-label="Pilih semua app terlihat"
+                                            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer accent-red-600"
+                                        />
+                                    </th>
                                     <SortTh col="clientName" label="Client / App Info" />
                                     <SortTh col="earning" label="Platform & Earning" />
                                     <SortTh col="status" label="Status" />
@@ -516,13 +612,22 @@ const [bulkPushing, setBulkPushing] = useState(false);
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 {filteredApps.length === 0 ? (
                                     <tr>
-                                        <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
                                             No apps found for this filter.
                                         </td>
                                     </tr>
                                 ) : (
                                     sortedApps.map(app => (
-                                        <tr key={app.id} className={`transition ${app.warning ? 'bg-orange-100 dark:bg-orange-900/40 border-l-4 border-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/60' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                                        <tr key={app.id} className={`transition ${app.id && selectedIds.has(app.id) ? 'bg-red-50 dark:bg-red-900/20' : app.warning ? 'bg-orange-100 dark:bg-orange-900/40 border-l-4 border-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/60' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                                            <td className="px-4 py-4 w-10">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!app.id && selectedIds.has(app.id)}
+                                                    onChange={() => app.id && toggleSelect(app.id)}
+                                                    aria-label={`Pilih ${app.appName || app.clientName}`}
+                                                    className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer accent-red-600"
+                                                />
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-1 group">
                                                     <span>{app.clientName}</span>
@@ -806,6 +911,51 @@ const [bulkPushing, setBulkPushing] = useState(false);
                                 className={`flex-1 font-bold py-2 rounded-lg text-sm text-white transition disabled:opacity-50 ${filter === 'RATE_TODAY' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-500 hover:bg-red-600'}`}
                             >
                                 Dorong {filteredApps.length} App →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Multi-select Uninstall Date Modal */}
+            {uninstallModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">🗑️ Jadwalkan Uninstall</h2>
+                            <button onClick={() => setUninstallModal(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-4">
+                            {selectedCount} app akan dijadwalkan uninstall & di-archive. Pilih tanggal task:
+                        </p>
+                        {draftSelectedCount > 0 && (
+                            <p className="text-xs text-orange-600 bg-orange-50 dark:bg-orange-900/30 rounded px-3 py-2 mb-4">
+                                ⚠️ {draftSelectedCount} app masih DRAFT (belum published). Tetap akan dijadwalkan & di-archive.
+                            </p>
+                        )}
+                        <div className="mb-5">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tanggal Uninstall *</label>
+                            <input
+                                type="date"
+                                value={uninstallDate}
+                                onChange={e => setUninstallDate(e.target.value)}
+                                className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                            />
+                            <p className="text-xs text-gray-400 mt-1">{uninstallDate ? formatDate(uninstallDate) : ''}</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setUninstallModal(false)}
+                                className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleBulkUninstall}
+                                disabled={!uninstallDate || uninstalling}
+                                className="flex-1 bg-red-500 hover:bg-red-600 font-bold py-2 rounded-lg text-sm text-white transition disabled:opacity-50"
+                            >
+                                {uninstalling ? 'Menyimpan...' : `Uninstall ${selectedCount} App →`}
                             </button>
                         </div>
                     </div>
